@@ -132,11 +132,15 @@ if grep -Eq 'curl|git|requestRefresh' <<<"$open_body"; then
 fi
 printf 'ok - overlay open path has no network or Git action\n'
 
-cmp -s "$ROOT/lib/shortcuts/ShortcutFormat.js" \
-  "$ROOT/../_shared/shortcuts/ShortcutFormat.js"
-cmp -s "$ROOT/lib/shortcuts/HyprlandBinding.qml" \
-  "$ROOT/../_shared/shortcuts/HyprlandBinding.qml"
-printf 'ok - shared shortcut library copies are current\n'
+if [[ -d $ROOT/../_shared/shortcuts ]]; then
+  cmp -s "$ROOT/lib/shortcuts/ShortcutFormat.js" \
+    "$ROOT/../_shared/shortcuts/ShortcutFormat.js"
+  cmp -s "$ROOT/lib/shortcuts/HyprlandBinding.qml" \
+    "$ROOT/../_shared/shortcuts/HyprlandBinding.qml"
+  printf 'ok - shared shortcut library copies are current\n'
+else
+  printf 'ok - shared shortcut library check skipped (no _shared checkout)\n'
+fi
 
 runtime_root="$(mktemp -d /tmp/plugin-control-qml-load.XXXXXX)"
 trap 'rm -rf -- "$runtime_root"' EXIT
