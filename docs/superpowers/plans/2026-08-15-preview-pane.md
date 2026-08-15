@@ -80,7 +80,7 @@ Create `tests/fixtures/catalog-preview.json`:
       "id": "preview.control",
       "name": "Control character",
       "sourceType": "community",
-      "previewThumbnail": "assets/img/a.png"
+      "previewThumbnail": "assets/img\u0001/a.png"
     },
     {
       "id": "preview.extension",
