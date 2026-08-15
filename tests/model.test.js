@@ -118,8 +118,9 @@ test("short plugin text leaves commands unpinned", () => {
 test("partial command input hides plugin rows", () => {
   const add = Fuzzy.search(records, "plug-ad", 50);
   assert.equal(add.mode, "command");
+  // "ad" is also a subsequence of plug-disabled, so it offers second.
   assert.deepEqual(add.results.map((row) => row.commandCompletion),
-    ["plug-add: "]);
+    ["plug-add: ", "plug-disabled: "]);
 
   const remove = Fuzzy.search(records, "plug-rm", 50);
   assert.equal(remove.mode, "command");
@@ -131,23 +132,34 @@ test("partial command input hides plugin rows", () => {
     ["plug-enable: "]);
 
   const disable = Fuzzy.search(records, "plug-dis", 50);
+  // Shared prefix with plug-disabled; both are offered, disable first.
   assert.deepEqual(disable.results.map((row) => row.commandCompletion),
-    ["plug-disable: "]);
+    ["plug-disable: ", "plug-disabled: "]);
 });
 
 test("command-shaped selection is fuzzy and keeps add first", () => {
   for (const query of ["plg-ad"]) {
     const result = Fuzzy.search(records, query, 50);
     assert.equal(result.mode, "command");
+    // plug-add still ranks first; plug-disabled matches as a subsequence.
     assert.deepEqual(result.results.map((row) => row.commandCompletion),
-      ["plug-add: "]);
+      ["plug-add: ", "plug-disabled: "]);
   }
   assert.deepEqual(Fuzzy.search(records, "plug", 50)
     .results.map((row) => row.commandCompletion),
     ["plug-add: ", "plug-remove: ", "plug-enable: ", "plug-disable: ",
-      "plug-update: "]);
+      "plug-update: ", "plug-builtin: ", "plug-mine: ", "plug-disabled: ",
+      "plug-type: "]);
   assert.deepEqual(Fuzzy.search(records, "plug", 1)
     .results.map((row) => row.commandCompletion), ["plug-add: "]);
+});
+
+test("an equally good prefix keeps the declared command order", () => {
+  assert.deepEqual(Fuzzy.search(records, "plug", 50)
+    .results.map((row) => row.commandCompletion),
+    ["plug-add: ", "plug-remove: ", "plug-enable: ", "plug-disable: ",
+      "plug-update: ", "plug-builtin: ", "plug-mine: ", "plug-disabled: ",
+      "plug-type: "]);
 });
 
 test("operation intent promotes commands above browse results", () => {
@@ -517,4 +529,93 @@ test("unavailable Update remains present with its explanation", () => {
       installed: true,
       updateStatus: status, updateReason: status }, false)[1].available,
     false);
+});
+
+const filterRecords = Catalog.prepareRecords([
+  {
+    id: "omarchy.clock", name: "Clock", source: "builtin", builtIn: true,
+    enabled: true, kind: "Bar widget"
+  },
+  {
+    id: "omarchy.dropbox", name: "Dropbox", source: "builtin", builtIn: true,
+    enabled: false, kind: "Bar widget"
+  },
+  {
+    id: "vendor.paused", name: "Paused", source: "local", installed: true,
+    enabled: false, removable: true, kind: "Panel"
+  },
+  {
+    id: "vendor.notes", name: "Notes", source: "local", installed: true,
+    enabled: true, removable: true, kind: "Service"
+  },
+  {
+    id: "io.example.weather", name: "Weather", source: "marketplace",
+    installable: true, kind: "Bar widget"
+  }
+]);
+
+test("builtin mode lists only first-party plugins", () => {
+  const result = Fuzzy.search(filterRecords, "plug-builtin: ", 50);
+  assert.equal(result.mode, "builtin");
+  assert.deepEqual(result.results.map((row) => row.id),
+    ["omarchy.clock", "omarchy.dropbox"]);
+});
+
+test("mine mode lists installed plugins that are not built in", () => {
+  const result = Fuzzy.search(filterRecords, "plug-mine: ", 50);
+  assert.equal(result.mode, "mine");
+  assert.deepEqual(result.results.map((row) => row.id),
+    ["vendor.notes", "vendor.paused"]);
+});
+
+test("disabled mode lists switched-off plugins of any origin", () => {
+  const result = Fuzzy.search(filterRecords, "plug-disabled: ", 50);
+  assert.equal(result.mode, "disabled");
+  assert.deepEqual(result.results.map((row) => row.id),
+    ["omarchy.dropbox", "vendor.paused"]);
+});
+
+test("filter modes still narrow by their query text", () => {
+  const result = Fuzzy.search(filterRecords, "plug-builtin: drop", 50);
+  assert.deepEqual(result.results.map((row) => row.id), ["omarchy.dropbox"]);
+});
+
+test("type mode filters on plugin kind", () => {
+  const result = Fuzzy.search(filterRecords, "plug-type: panel", 50);
+  assert.equal(result.mode, "type");
+  assert.deepEqual(result.results.map((row) => row.id), ["vendor.paused"]);
+});
+
+test("type mode accepts either kind spelling", () => {
+  for (const query of ["plug-type: bar widget", "plug-type: bar-widget"]) {
+    assert.deepEqual(Fuzzy.search(filterRecords, query, 50).results
+      .map((row) => row.id),
+      ["omarchy.clock", "omarchy.dropbox", "io.example.weather"]);
+  }
+});
+
+test("empty type mode keeps every plugin", () => {
+  assert.equal(Fuzzy.search(filterRecords, "plug-type: ", 50).results.length,
+    filterRecords.length);
+});
+
+test("the closest command match ranks first", () => {
+  const first = (query) => Fuzzy.search(filterRecords, query, 50)
+    .results[0].commandCompletion;
+  assert.equal(first("plug-t"), "plug-type: ");
+  assert.equal(first("plug-b"), "plug-builtin: ");
+  assert.equal(first("plug-m"), "plug-mine: ");
+});
+
+test("filter commands complete from partial input", () => {
+  const completions = (query) => Fuzzy.search(filterRecords, query, 50)
+    .results.map((row) => row.commandCompletion);
+  assert.deepEqual(completions("plug-bui"), ["plug-builtin: "]);
+  assert.deepEqual(completions("plug-mi"), ["plug-mine: "]);
+  // Ambiguous on purpose: upstream's plug-disable (turn one off) and our
+  // plug-disabled (list the off ones) share this prefix, so both offer.
+  assert.deepEqual(completions("plug-dis"),
+    ["plug-disable: ", "plug-disabled: "]);
+  assert.deepEqual(completions("plug-disabled"), ["plug-disabled: "]);
+  assert.deepEqual(completions("plug-ty"), ["plug-type: "]);
 });

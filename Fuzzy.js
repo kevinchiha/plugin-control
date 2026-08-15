@@ -25,13 +25,24 @@ var COMMANDS = [
   commandRecord("plug-remove", "remove", "Search removable local plugins"),
   commandRecord("plug-enable", "enable", "Search disabled plugins"),
   commandRecord("plug-disable", "disable", "Search enabled plugins"),
-  commandRecord("plug-update", "update", "Check for plugin updates")
+  commandRecord("plug-update", "update", "Check for plugin updates"),
+  commandRecord("plug-builtin", "builtin",
+    "Search built-in Omarchy plugins"),
+  commandRecord("plug-mine", "mine",
+    "Search plugins you installed or cloned yourself"),
+  commandRecord("plug-disabled", "disabled",
+    "Search plugins that are switched off"),
+  commandRecord("plug-type", "type",
+    "Filter by kind: bar widget, panel, service, overlay")
 ]
 
 function parseQuery(value) {
   var raw = text(value)
-  var match = /^\s*plug-(add|remove|enable|disable|update)\s*:\s*([\s\S]*)$/i
-    .exec(raw)
+  // "disabled" must precede "disable": alternation is ordered, and the
+  // shorter name would otherwise swallow the prefix of the longer one.
+  var match =
+    /^\s*plug-(add|remove|enable|disabled|disable|update|builtin|mine|type)\s*:\s*([\s\S]*)$/i
+      .exec(raw)
   if (!match) return { mode: "browse", query: raw.trim() }
 
   return {
@@ -117,6 +128,17 @@ function compareRows(left, right) {
   return leftId < rightId ? -1 : (leftId > rightId ? 1 : 0)
 }
 
+// fieldScore separates match quality into fixed 20000-wide bands (exact,
+// prefix, token boundary, contiguous, subsequence) and varies the remainder by
+// haystack length. Commands all share the "plug-" prefix, so that remainder
+// would rank them by name length; comparing bands keeps the declared order
+// (actions before filters) as the tie-break instead.
+var SCORE_BAND = 20000
+
+function scoreBand(score) {
+  return Math.floor(score / SCORE_BAND)
+}
+
 function commandIntent(value) {
   var query = normalize(value)
   if (query.length < 3 || query.indexOf(":") >= 0) return false
@@ -128,14 +150,21 @@ function commandIntent(value) {
 function commandSuggestions(value) {
   if (!commandIntent(value)) return null
   var query = normalize(value)
-  var results = []
+  var scored = []
   for (var i = 0; i < COMMANDS.length; i++) {
     var command = COMMANDS[i]
     var canonicalScore = fieldScore(command.commandName, query, 900, true)
     var operationScore = fieldScore(command.operation, query, 850, true)
-    if (Math.max(canonicalScore, operationScore) >= 0)
-      results.push(command)
+    var best = Math.max(canonicalScore, operationScore)
+    if (best >= 0)
+      scored.push({ command: command, band: scoreBand(best), order: i })
   }
+  scored.sort(function (left, right) {
+    if (left.band !== right.band) return right.band - left.band
+    return left.order - right.order
+  })
+  var results = []
+  for (var j = 0; j < scored.length; j++) results.push(scored[j].command)
   return results
 }
 
@@ -163,7 +192,23 @@ function eligible(record, mode) {
       && (record.canDisable === true || record.fullBar === true)
   if (mode === "disable")
     return present && record.canDisable === true && record.enabled === true
+  if (mode === "builtin")
+    return record.builtIn === true
+  if (mode === "mine")
+    return record.installed === true && record.builtIn !== true
+  if (mode === "disabled")
+    return record.enabled === false
   return true
+}
+
+function normalizeKind(value) {
+  return normalize(value).replace(/[-_]+/g, " ")
+}
+
+function matchesKind(record, query) {
+  var needle = normalizeKind(query)
+  if (!needle) return true
+  return normalizeKind(record.kind).indexOf(needle) >= 0
 }
 
 function search(records, input, limit) {
@@ -183,6 +228,11 @@ function search(records, input, limit) {
   for (var i = 0; i < values.length; i++) {
     var record = values[i]
     if (!eligible(record, parsed.mode)) continue
+    if (parsed.mode === "type") {
+      if (matchesKind(record, parsed.query))
+        rows.push({ record: record, score: 0 })
+      continue
+    }
     var score = scoreRecord(record, parsed.query)
     if (parsed.query && score < 0) continue
     rows.push({ record: record, score: score })
