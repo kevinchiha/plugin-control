@@ -536,6 +536,7 @@ manifest_record() {
   local id="$1"
   local enabled="$2"
   local path="$3"
+  local can_disable="${4:-false}"
   local manifest="$path/manifest.json"
   local dirty=false repository=""
   [[ -f $manifest ]] || return 1
@@ -548,7 +549,8 @@ manifest_record() {
 
   jq -c \
     --arg id "$id" --arg path "$path" --arg repository "$repository" \
-    --argjson enabled "$enabled" --argjson dirty "$dirty" '
+    --argjson enabled "$enabled" --argjson dirty "$dirty" \
+    --argjson canDisable "$can_disable" '
       {
         id:$id,
         name:(.name // $id),
@@ -562,6 +564,7 @@ manifest_record() {
         sourceRank:50,
         installed:true,
         enabled:$enabled,
+        canDisable:$canDisable,
         builtIn:false,
         installable:false,
         removable:true,
@@ -598,23 +601,25 @@ installed_records() {
         sourceRank:40,
         installed:false,
         enabled:(.enabled == true),
+        canDisable:(.canDisable != false),
         installable:false,
         removable:false
       }
   ' "$runtime" >>"$output"
 
-  local id enabled path record
-  while IFS=$'\t' read -r id enabled; do
+  local id enabled can_disable path record
+  while IFS=$'\t' read -r id enabled can_disable; do
     valid_plugin_id "$id" || continue
     printf '%s\n' "$id" >>"$seen"
     path="$PLUGINS_ROOT/$id"
     [[ -e $path || -L $path ]] || continue
-    record="$(manifest_record "$id" "$enabled" "$path" 2>/dev/null || true)"
+    record="$(manifest_record "$id" "$enabled" "$path" "$can_disable" \
+      2>/dev/null || true)"
     [[ -n $record ]] && printf '%s\n' "$record" >>"$output"
   done < <(jq -r '
     .[]
     | select(.firstParty != true)
-    | [.id, (.enabled == true)]
+    | [.id, (.enabled == true), (.canDisable != false)]
     | @tsv
   ' "$runtime")
 
@@ -1016,31 +1021,33 @@ worker_command() {
       fi
     fi
   elif [[ $operation == enable || $operation == disable || $operation == add-bar ]]; then
-    if ! jq -e '.builtIn == true' <<<"$record" >/dev/null; then
-      message="The confirmed record is not an Omarchy built-in."
+    if ! jq -e '.canDisable != false
+      and (.builtIn == true or .installed == true)' \
+      <<<"$record" >/dev/null; then
+      message="The confirmed plugin cannot be switched off."
     elif [[ $operation == add-bar ]] \
       && ! jq -e '(.kind // "" | ascii_downcase | gsub("[-_]"; " ")
         | contains("bar widget"))' \
         <<<"$record" >/dev/null; then
-      message="The confirmed built-in is not a bar widget."
+      message="The confirmed plugin is not a bar widget."
     elif [[ $operation == enable ]] \
       && timeout --signal=TERM --kill-after=2s 30s \
         omarchy plugin enable "$id" >"$output_file" 2>&1; then
       succeeded=true
-      message="Built-in plugin enabled."
+      message="Plugin enabled."
     elif [[ $operation == disable ]] \
       && timeout --signal=TERM --kill-after=2s 30s \
         omarchy plugin disable "$id" >"$output_file" 2>&1; then
       succeeded=true
-      message="Built-in plugin disabled."
+      message="Plugin disabled."
     elif [[ $operation == add-bar ]] \
       && timeout --signal=TERM --kill-after=2s 30s \
         omarchy bar put "$id" >"$output_file" 2>&1; then
       succeeded=true
-      message="Built-in widget added to the bar."
+      message="Widget added to the bar."
     else
       rc=$?
-      message="Built-in plugin action failed with exit code $rc."
+      message="Plugin action failed with exit code $rc."
     fi
   else
     message="Unsupported action."

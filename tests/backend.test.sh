@@ -497,3 +497,46 @@ printf 'ok - failed action worker staging is cleaned\n'
 helper ack "$(jq -r '.actionId' <<<"$status")" \
   | jq -e '.acknowledged == true' >/dev/null
 printf 'ok - completed action acknowledgement\n'
+
+wait_worker_release
+toggle_plugin="$plugins_root/local.toggle"
+mkdir -p "$toggle_plugin"
+cat >"$toggle_plugin/manifest.json" <<'JSON'
+{
+  "schemaVersion": 1,
+  "id": "local.toggle",
+  "name": "Toggle Me",
+  "version": "1.0.0",
+  "author": "Local",
+  "description": "Third-party widget",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget":"Plugin.qml"}
+}
+JSON
+printf 'import QtQuick\nItem {}\n' >"$toggle_plugin/Plugin.qml"
+printf '[{"id":"local.toggle","name":"Toggle Me","kinds":["bar-widget"],
+  "enabled":true,"firstParty":false,"canDisable":true}]\n' >"$MOCK_RUNTIME"
+snapshot="$(rebuild_snapshot)"
+snapshot_id="$(jq -r '.snapshotId' <<<"$snapshot")"
+jq -e '.records[] | select(.id == "local.toggle")
+  | .canDisable == true and .builtIn == false' <<<"$snapshot" >/dev/null
+helper action "$ROOT" disable local.toggle "$snapshot_id" background >/dev/null
+status="$(wait_action)"
+jq -e '.ok == true and .operation == "disable"' <<<"$status" >/dev/null
+grep -Fqx 'plugin disable local.toggle' "$MOCK_LOG"
+wait_worker_release
+printf 'ok - third-party plugins can be switched off without removal\n'
+
+printf '[{"id":"local.toggle","name":"Toggle Me","kinds":["bar"],
+  "enabled":true,"firstParty":false,"canDisable":false}]\n' >"$MOCK_RUNTIME"
+snapshot="$(rebuild_snapshot)"
+snapshot_id="$(jq -r '.snapshotId' <<<"$snapshot")"
+jq -e '.records[] | select(.id == "local.toggle") | .canDisable == false' \
+  <<<"$snapshot" >/dev/null
+helper action "$ROOT" disable local.toggle "$snapshot_id" background >/dev/null
+status="$(wait_action)"
+jq -e '.ok == false and (.message | contains("cannot be switched off"))' \
+  <<<"$status" >/dev/null
+wait_worker_release
+rm -rf -- "$toggle_plugin"
+printf 'ok - plugins the shell cannot toggle are refused\n'

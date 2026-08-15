@@ -36,9 +36,9 @@ FocusScope {
     if (operation === "install") return "Install and enable plugin?"
     if (selfRemoval) return "Remove Plugin Control itself?"
     if (operation === "remove") return "Remove plugin?"
-    if (operation === "enable") return "Enable built-in plugin?"
-    if (operation === "disable") return "Disable built-in plugin?"
-    if (operation === "add-bar") return "Add built-in widget to bar?"
+    if (operation === "enable") return "Enable plugin?"
+    if (operation === "disable") return "Disable plugin?"
+    if (operation === "add-bar") return "Add widget to bar?"
     return "Plugin details"
   }
   readonly property string confirmLabel: {

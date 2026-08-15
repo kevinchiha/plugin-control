@@ -192,9 +192,38 @@ ShellRoot {
       var overlay = root.loadEntry("PluginControl.qml", "overlay")
       if (overlay && "service" in overlay) {
         overlay.service = root.serviceObject
+        overlay.query = ""
+        var toggleCases = [
+          { id: "builtin-widget-on", builtIn: true, kind: "Bar widget",
+            enabled: true, canDisable: true, expected: "disable" },
+          { id: "builtin-widget-off", builtIn: true, kind: "Bar widget",
+            enabled: false, canDisable: true, expected: "add-bar" },
+          { id: "builtin-service-off", builtIn: true, kind: "service",
+            enabled: false, canDisable: true, expected: "enable" },
+          { id: "mine-widget-on", installed: true, removable: true,
+            kind: "Bar widget", enabled: true, canDisable: true,
+            expected: "disable" },
+          { id: "mine-service-off", installed: true, removable: true,
+            kind: "service", enabled: false, canDisable: true,
+            expected: "enable" },
+          { id: "mine-bar", installed: true, removable: true, kind: "bar",
+            enabled: true, canDisable: false, expected: "remove" },
+          { id: "builtin-bar", builtIn: true, kind: "bar", enabled: true,
+            canDisable: false, expected: "browse" },
+          { id: "marketplace", installable: true, kind: "Bar widget",
+            expected: "install" }
+        ]
+        for (var t = 0; t < toggleCases.length; t++) {
+          if (overlay.availableOperation(toggleCases[t])
+              !== toggleCases[t].expected) {
+            console.error("PLUGIN_CONTROL_LOAD_ERROR toggle operation "
+              + toggleCases[t].id)
+          }
+        }
         overlay.query = "plug-in"
         if (overlay.mode !== "command"
-            || overlay.filteredRecords.length !== 1
+            || overlay.filteredRecords.length < 1
+            || overlay.filteredRecords[0].commandCompletion !== "plug-install: "
             || overlay.selectedRecord !== null) {
           console.error("PLUGIN_CONTROL_LOAD_ERROR install completion stage")
         }

@@ -294,6 +294,15 @@ test("bar widget kinds accept native hyphenated spelling", () => {
   assert.equal(Catalog.isBarWidget("overlay"), false);
 });
 
+test("canDisable normalizes to a boolean and defaults to switchable", () => {
+  const values = Catalog.prepareRecords([
+    { id: "x.open", name: "Open", installed: true },
+    { id: "x.closed", name: "Closed", installed: true, canDisable: false }
+  ]);
+  assert.equal(values[0].canDisable, true);
+  assert.equal(values[1].canDisable, false);
+});
+
 const filterRecords = Catalog.prepareRecords([
   {
     id: "omarchy.clock", name: "Clock", source: "builtin", builtIn: true,

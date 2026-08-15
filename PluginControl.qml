@@ -249,16 +249,18 @@ Item {
     positionSelection()
   }
 
+  // Enter toggles anything the shell reports as present and switchable,
+  // whether it ships with Omarchy or you installed it. Removal is destructive
+  // and stays behind the explicit plug-remove: mode.
   function availableOperation(record) {
     if (!record) return "browse"
     if (mode === "install") return "install"
     if (mode === "remove") return "remove"
-    if (record.builtIn === true) {
-      var kind = String(record.kind || "").toLowerCase()
-      if (kind === "bar") return "browse"
-      if (CatalogModel.isBarWidget(kind))
-        return record.enabled === false ? "add-bar" : "disable"
-      return record.enabled === false ? "enable" : "disable"
+    var present = record.builtIn === true || record.installed === true
+    if (present && record.canDisable !== false) {
+      if (record.enabled === false)
+        return CatalogModel.isBarWidget(record.kind) ? "add-bar" : "enable"
+      return "disable"
     }
     if (record.installed === true && record.removable === true) return "remove"
     if (record.installable === true) return "install"

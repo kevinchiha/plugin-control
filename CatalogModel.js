@@ -94,6 +94,7 @@ function normalizeRecord(value) {
   record.stateLabel = stateLabel(record)
   record.installed = record.installed === true
   record.enabled = record.enabled !== false
+  record.canDisable = record.canDisable !== false
   record.installable = record.installable === true && !record.installed
   record.removable = record.removable === true
     && record.builtIn !== true
