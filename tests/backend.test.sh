@@ -296,9 +296,16 @@ snapshot_id="$(jq -r '.snapshotId' <<<"$snapshot")"
 helper action "$ROOT" add-bar omarchy.weather "$snapshot_id" background >/dev/null
 status="$(wait_action)"
 jq -e '.ok == true and .operation == "add-bar"' <<<"$status" >/dev/null
-grep -Fqx 'bar put omarchy.weather' "$MOCK_LOG"
+# Not `bar put`: that is the unattended verb and returns success without acting
+# when the widget is already represented on the bar — including by an active
+# clone — which reported "added" while the plugin stayed disabled.
+grep -Fqx 'plugin enable omarchy.weather' "$MOCK_LOG"
+if grep -Fqx 'bar put omarchy.weather' "$MOCK_LOG"; then
+  printf 'not ok - add-bar still used the silently-skipping bar put verb\n' >&2
+  exit 1
+fi
 wait_worker_release
-printf 'ok - native hyphenated bar widgets use the bar placement command\n'
+printf 'ok - adding a widget to the bar enables it outright\n'
 
 plugins_root="$XDG_CONFIG_HOME/omarchy/plugins"
 weather_local="$plugins_root/io.example.weather"

@@ -1042,7 +1042,7 @@ worker_command() {
       message="Plugin disabled."
     elif [[ $operation == add-bar ]] \
       && timeout --signal=TERM --kill-after=2s 30s \
-        omarchy bar put "$id" >"$output_file" 2>&1; then
+        omarchy plugin enable "$id" >"$output_file" 2>&1; then
       succeeded=true
       message="Widget added to the bar."
     else
