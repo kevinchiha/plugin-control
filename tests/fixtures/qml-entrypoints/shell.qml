@@ -8,8 +8,88 @@ ShellRoot {
     Quickshell.env("PLUGIN_CONTROL_SOURCE_DIR")
   property var createdObjects: []
   property var serviceObject: null
+  property var overlayObject: null
   property int dialogCanceledCount: 0
   property int dialogConfirmedCount: 0
+
+  function runLightboxChecks(overlay, paneVisible) {
+    if (!paneVisible) {
+      console.error("PLUGIN_CONTROL_LOAD_ERROR preview pane never became "
+        + "visible for lightbox checks")
+      return
+    }
+
+    var imageRecord = {
+      id: "io.example.screenshot",
+      name: "Screenshot Plugin",
+      previewImage: "https://example.com/full.png"
+    }
+    var plainRecord = {
+      id: "io.example.no-screenshot",
+      name: "No Screenshot Plugin"
+    }
+
+    if (overlay.footerModel.length !== 6
+        || overlay.footerModel[0].keyLabel !== "[Ctrl+I]"
+        || overlay.footerModel[1].keyLabel !== "[Ctrl+E]"
+        || overlay.footerModel[1].label !== "Enlarge"
+        || overlay.footerModel[2].keyLabel !== "[Ctrl+W]"
+        || overlay.footerModel[3].keyLabel !== "[Ctrl+G]"
+        || overlay.footerModel[4].keyLabel !== "[Ctrl+R]"
+        || overlay.footerModel[5].keyLabel !== "[Ctrl+S]") {
+      console.error("PLUGIN_CONTROL_LOAD_ERROR footer model pane visible")
+    }
+
+    // Position 1 means "[Ctrl+W]" (Marketplace) in the five-entry footer but
+    // "[Ctrl+E]" (Enlarge) here - proves activateFooter dispatches by key
+    // label, not array position.
+    overlay.filteredRecords = [imageRecord]
+    overlay.selectedIndex = 0
+    overlay.lightboxOpen = false
+    if (!overlay.activateFooter(1) || !overlay.lightboxOpen) {
+      console.error("PLUGIN_CONTROL_LOAD_ERROR footer enlarge dispatch")
+    }
+    overlay.closeLightbox()
+    if (overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR closeLightbox clears state")
+
+    overlay.toggleLightbox()
+    if (!overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR toggleLightbox opens with image")
+    overlay.toggleLightbox()
+    if (overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR toggleLightbox closes when open")
+
+    overlay.filteredRecords = [plainRecord]
+    overlay.selectedIndex = 0
+    overlay.lightboxOpen = false
+    overlay.toggleLightbox()
+    if (overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR toggleLightbox opens without image")
+
+    overlay.filteredRecords = [imageRecord]
+    overlay.selectedIndex = 0
+    var ctrlE = { modifiers: Qt.ControlModifier, key: Qt.Key_E }
+    overlay.lightboxOpen = false
+    if (!overlay.handleKey(ctrlE) || !overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR ctrl+e opens lightbox")
+    var indexBeforeSwallow = overlay.selectedIndex
+    if (!overlay.handleKey({ modifiers: 0, key: Qt.Key_Down })
+        || overlay.selectedIndex !== indexBeforeSwallow
+        || !overlay.lightboxOpen) {
+      console.error("PLUGIN_CONTROL_LOAD_ERROR lightbox swallows other keys")
+    }
+    if (!overlay.handleKey({ modifiers: 0, key: Qt.Key_Escape })
+        || overlay.lightboxOpen) {
+      console.error("PLUGIN_CONTROL_LOAD_ERROR lightbox escape closes")
+    }
+    if (!overlay.handleKey(ctrlE) || !overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR ctrl+e reopens lightbox")
+    if (!overlay.handleKey(ctrlE) || overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR ctrl+e closes lightbox")
+
+    console.log("PLUGIN_CONTROL_INTERACTION_OK lightbox interactions")
+  }
 
   function manifestData() {
     return {
@@ -190,6 +270,7 @@ ShellRoot {
         }
       }
       var overlay = root.loadEntry("PluginControl.qml", "overlay")
+      root.overlayObject = overlay
       if (overlay && "service" in overlay) {
         overlay.service = root.serviceObject
         overlay.query = ""
@@ -244,10 +325,44 @@ ShellRoot {
         if (overlay.query !== "")
           console.error("PLUGIN_CONTROL_LOAD_ERROR type cycle wrap")
 
-        if (overlay.footerModel.length !== 5)
-          console.error("PLUGIN_CONTROL_LOAD_ERROR footer model size")
+        var footerInfoRecord = {
+          id: "io.example.footer-info",
+          name: "Footer Info Target",
+          installable: false,
+          installed: false
+        }
+        overlay.filteredRecords = [footerInfoRecord]
+        overlay.selectedIndex = 0
+        overlay.selectedRecord = null
+        if (overlay.footerModel.length !== 5
+            || overlay.footerModel[0].keyLabel !== "[Ctrl+I]"
+            || overlay.footerModel[0].label !== "Info"
+            || overlay.footerModel[1].keyLabel !== "[Ctrl+W]"
+            || overlay.footerModel[2].keyLabel !== "[Ctrl+G]"
+            || overlay.footerModel[2].label !== "GitHub source"
+            || overlay.footerModel[3].keyLabel !== "[Ctrl+R]"
+            || overlay.footerModel[3].label !== "Refresh"
+            || overlay.footerModel[4].keyLabel !== "[Ctrl+S]"
+            || overlay.footerModel[4].label !== "Settings") {
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer model pane hidden")
+        }
         if (overlay.activateFooter(-1) || overlay.activateFooter(5))
           console.error("PLUGIN_CONTROL_LOAD_ERROR footer bounds")
+        if (!overlay.activateFooter(0) || !overlay.selectedRecord
+            || overlay.selectedRecord.id !== "io.example.footer-info"
+            || overlay.pendingOperation !== "browse") {
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer info dispatch")
+        }
+        if (!overlay.handleKey({ modifiers: 0, key: Qt.Key_Escape }))
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer info close")
+        overlay.selectedRecord = null
+        var footerService = overlay.service
+        overlay.service = null
+        overlay.transientMessage = "stale refresh message"
+        if (!overlay.activateFooter(3) || overlay.transientMessage !== "") {
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer refresh dispatch")
+        }
+        overlay.service = footerService
         if (!overlay.activateFooter(4) || overlay.settingsMenuOpen !== true)
           console.error("PLUGIN_CONTROL_LOAD_ERROR footer settings action")
         overlay.settingsMenuOpen = false
@@ -605,7 +720,29 @@ ShellRoot {
           console.error("PLUGIN_CONTROL_LOAD_ERROR bar removal payload")
         }
       }
-      Qt.callLater(Qt.quit)
+      lateProbe.start()
+    }
+  }
+
+  Timer {
+    id: lateProbe
+    interval: 200
+    repeat: true
+    running: false
+    property int attempts: 0
+    onTriggered: {
+      attempts++
+      var overlay = root.overlayObject
+      if (!overlay) {
+        stop()
+        Qt.quit()
+        return
+      }
+      if (overlay.previewPaneVisible || attempts >= 30) {
+        stop()
+        root.runLightboxChecks(overlay, overlay.previewPaneVisible)
+        Qt.quit()
+      }
     }
   }
 }

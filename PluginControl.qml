@@ -151,6 +151,7 @@ Item {
     selectedRecord = null
     pendingSnapshotId = ""
     settingsMenuOpen = false
+    lightboxOpen = false
     selfRemovalRequested = payload.removeSelf === true
     actionDialog.closeDialog()
     if (payload.settings === true) showSettingsMenu()
@@ -170,6 +171,7 @@ Item {
     if (!surfaceVisible) return
     opened = false
     settingsMenuOpen = false
+    lightboxOpen = false
     selfRemovalRequested = false
     actionDialog.closeDialog()
     closeTimer.interval = service && service.animationsEnabled ? 80 : 0
@@ -431,6 +433,7 @@ Item {
       closeLightbox()
       return
     }
+    if (!previewPaneVisible) return
     var record = shortcutRecord
     if (!record || !String(record.previewImage || "")) return
     lightboxOpen = true
@@ -582,6 +585,11 @@ Item {
   }
 
   function handleKey(event) {
+    if (root.lightboxOpen) {
+      if (event.key === Qt.Key_Escape || isControlShortcut(event, Qt.Key_E))
+        root.closeLightbox()
+      return true
+    }
     if (actionDialog.opened) return actionDialog.handleKey(event)
     var control = (event.modifiers & Qt.ControlModifier) !== 0
     var alt = (event.modifiers & Qt.AltModifier) !== 0
@@ -601,8 +609,6 @@ Item {
 
     if (isControlShortcut(event, Qt.Key_P)) {
       dismiss()
-    } else if (event.key === Qt.Key_Escape && root.lightboxOpen) {
-      root.closeLightbox()
     } else if (event.key === Qt.Key_Escape) {
       dismiss()
     } else if (isControlShortcut(event, Qt.Key_I)) {
