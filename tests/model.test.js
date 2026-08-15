@@ -387,3 +387,61 @@ test("filter commands complete from partial input", () => {
   assert.deepEqual(completions("plug-dis"), ["plug-disabled: "]);
   assert.deepEqual(completions("plug-ty"), ["plug-type: "]);
 });
+
+test("preview fields survive preparation", () => {
+  const prepared = Catalog.prepareRecords([
+    {
+      id: "io.example.preview",
+      name: "Preview",
+      source: "marketplace",
+      previewThumbnail: "https://omarchyplugins.com/a-card.webp",
+      previewImage: "https://omarchyplugins.com/a-detail.webp",
+      previewThumbnailWidth: 720,
+      previewThumbnailHeight: 405,
+      previewWidth: 1600,
+      previewHeight: 900,
+      stars: 13,
+      license: "MIT",
+      repositoryUpdatedAt: "2026-08-11T17:06:54Z"
+    }
+  ]);
+  assert.equal(prepared[0].previewThumbnail,
+    "https://omarchyplugins.com/a-card.webp");
+  assert.equal(prepared[0].previewImage,
+    "https://omarchyplugins.com/a-detail.webp");
+  assert.equal(prepared[0].previewThumbnailWidth, 720);
+  assert.equal(prepared[0].previewHeight, 900);
+  assert.equal(prepared[0].stars, 13);
+  assert.equal(prepared[0].license, "MIT");
+  assert.equal(prepared[0].repositoryUpdatedAt, "2026-08-11T17:06:54Z");
+});
+
+test("non-https previews and bad numbers are dropped", () => {
+  const prepared = Catalog.prepareRecords([
+    {
+      id: "io.example.bad",
+      name: "Bad",
+      source: "marketplace",
+      previewThumbnail: "file:///etc/passwd",
+      previewImage: "",
+      previewThumbnailWidth: "wide",
+      stars: -3
+    }
+  ]);
+  assert.equal(prepared[0].previewThumbnail, "");
+  assert.equal(prepared[0].previewImage, "");
+  assert.equal(prepared[0].previewThumbnailWidth, 0);
+  assert.equal(prepared[0].stars, 0);
+});
+
+test("preview URLs are not searchable text", () => {
+  const prepared = Catalog.prepareRecords([
+    {
+      id: "io.example.search",
+      name: "Search",
+      source: "marketplace",
+      previewThumbnail: "https://omarchyplugins.com/zzzunique.webp"
+    }
+  ]);
+  assert.equal(prepared[0].searchFields.join(" ").indexOf("zzzunique"), -1);
+});

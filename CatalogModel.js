@@ -14,6 +14,16 @@ function searchText(value) {
   return cleanText(value).toLowerCase().replace(/\s+/g, " ")
 }
 
+function httpsUrl(value) {
+  var raw = cleanText(value)
+  return raw.indexOf("https://") === 0 ? raw : ""
+}
+
+function countNumber(value) {
+  var number = Number(value)
+  return isFinite(number) && number > 0 ? Math.floor(number) : 0
+}
+
 function copy(value) {
   var out = {}
   if (!isRecord(value)) return out
@@ -83,6 +93,15 @@ function normalizeRecord(value) {
   record.repository = cleanText(record.repository)
   record.category = cleanText(record.category)
   record.kind = cleanText(record.kind)
+  record.license = cleanText(record.license)
+  record.repositoryUpdatedAt = cleanText(record.repositoryUpdatedAt)
+  record.stars = countNumber(record.stars)
+  record.previewThumbnail = httpsUrl(record.previewThumbnail)
+  record.previewImage = httpsUrl(record.previewImage)
+  record.previewThumbnailWidth = countNumber(record.previewThumbnailWidth)
+  record.previewThumbnailHeight = countNumber(record.previewThumbnailHeight)
+  record.previewWidth = countNumber(record.previewWidth)
+  record.previewHeight = countNumber(record.previewHeight)
   record.source = cleanText(record.source) || "custom"
   record.sourceName = cleanText(record.sourceName)
   record.marketplaceListed = record.marketplaceListed === true
