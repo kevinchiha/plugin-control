@@ -53,7 +53,15 @@ Item {
   readonly property color urgent: Color.urgent
   readonly property var borderSpec: Border.surfaceSpec(
     "menu", "border", borderColor, Math.max(1, Style.space(2)))
-  readonly property int cardWidth: Math.min(Style.space(720),
+  readonly property bool previewPaneVisible: root.service
+    && !root.service.previewPaneHidden
+    && paletteChromeVisible
+    && !actionDialog.opened
+    && panel.width >= Style.space(900)
+  readonly property int previewPaneWidth: previewPaneVisible
+    ? Style.space(320) : 0
+  readonly property int cardWidth: Math.min(
+    previewPaneVisible ? Style.space(1080) : Style.space(720),
     Math.max(Style.space(320), panel.width - Style.gapsOut * 2))
   readonly property int rowHeight: Style.space(60)
   readonly property int headerHeight: Style.space(52)
@@ -239,6 +247,18 @@ Item {
       ? Math.max(0, Math.min(selectedIndex, displayModel.count - 1)) : 0
     if (service) service.recordFilterDuration(Date.now() - filterStartedAt)
     Qt.callLater(positionSelection)
+    warmPreviewsTimer.restart()
+  }
+
+  function warmPreviews() {
+    if (!service || !previewPaneVisible) return
+    var start = Math.max(0, selectedIndex - 2)
+    var end = Math.min(filteredRecords.length, start + 8)
+    for (var index = start; index < end; index++) {
+      var record = filteredRecords[index]
+      if (record && record.previewThumbnail)
+        service.requestPreview(record.previewThumbnail)
+    }
   }
 
   function positionSelection() {
@@ -649,6 +669,13 @@ Item {
     onTriggered: root.surfaceVisible = false
   }
 
+  Timer {
+    id: warmPreviewsTimer
+    interval: 250
+    repeat: false
+    onTriggered: root.warmPreviews()
+  }
+
   PanelWindow {
     id: panel
     visible: root.surfaceVisible
@@ -863,165 +890,186 @@ Item {
               - parent.spacing * root.chromeSpacingCount)
           clip: true
 
-          ListView {
-            id: resultList
-            focus: root.settingsMenuOpen
+          Row {
             anchors.fill: parent
-            visible: displayModel.count > 0
-            model: displayModel
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            spacing: Style.space(2)
-            Keys.priority: Keys.BeforeItem
-            Keys.onPressed: function(event) {
-              if (root.settingsMenuOpen && root.handleKey(event))
-                event.accepted = true
-            }
+            spacing: root.previewPaneVisible ? Style.spacing.md : 0
 
-            delegate: Rectangle {
-              id: resultRow
-              required property int index
-              required property string pluginName
-              required property string pluginId
-              required property string description
-              required property string author
-              required property string kind
-              required property string stateLabel
-              required property string sourceLabel
-              required property string warning
-              required property string version
-              required property string releaseTag
-              required property string repository
+            Item {
+              width: parent.width - root.previewPaneWidth - parent.spacing
+              height: parent.height
+              clip: true
 
-              readonly property bool selected: index === root.selectedIndex
-              width: ListView.view.width
-              height: root.rowHeight
-              radius: Style.cornerRadius
-              color: selected ? root.selectedBackground : "transparent"
-
-              MouseArea {
+              ListView {
+                id: resultList
+                focus: root.settingsMenuOpen
                 anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onEntered: root.select(resultRow.index)
-                onClicked: {
-                  root.select(resultRow.index)
-                  root.activateIndex(resultRow.index)
-                }
-              }
-
-              Column {
-                anchors.left: parent.left
-                anchors.leftMargin: Style.spacing.md
-                anchors.right: badgeColumn.left
-                anchors.rightMargin: Style.spacing.sm
-                anchors.verticalCenter: parent.verticalCenter
+                visible: displayModel.count > 0
+                model: displayModel
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
                 spacing: Style.space(2)
-
-                Row {
-                  width: parent.width
-                  spacing: Style.spacing.sm
-                  Text {
-                    width: Math.min(implicitWidth, parent.width
-                      * (root.settingsMenuOpen ? 1 : 0.52))
-                    text: resultRow.pluginName
-                    textFormat: Text.PlainText
-                    color: resultRow.selected ? root.selectedText : root.foreground
-                    font.family: Style.font.menuFamily
-                    font.pixelSize: Style.font.title
-                    font.bold: true
-                    elide: Text.ElideRight
-                  }
-                  Text {
-                    visible: !root.settingsMenuOpen
-                    width: parent.width - x
-                    text: resultRow.pluginId
-                    textFormat: Text.PlainText
-                    color: resultRow.selected ? root.selectedText : root.foreground
-                    opacity: 0.60
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                    elide: Text.ElideRight
-                  }
+                Keys.priority: Keys.BeforeItem
+                Keys.onPressed: function(event) {
+                  if (root.settingsMenuOpen && root.handleKey(event))
+                    event.accepted = true
                 }
 
-                Text {
-                  width: parent.width
-                  text: root.settingsMenuOpen ? resultRow.description
-                    : resultRow.author + " - "
-                      + (resultRow.description || resultRow.kind)
-                  textFormat: Text.PlainText
-                  color: resultRow.selected ? root.selectedText : root.foreground
-                  opacity: 0.65
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.body
-                  elide: Text.ElideRight
-                  horizontalAlignment: Text.AlignLeft
-                }
+                delegate: Rectangle {
+                  id: resultRow
+                  required property int index
+                  required property string pluginName
+                  required property string pluginId
+                  required property string description
+                  required property string author
+                  required property string kind
+                  required property string stateLabel
+                  required property string sourceLabel
+                  required property string warning
+                  required property string version
+                  required property string releaseTag
+                  required property string repository
 
-                Text {
-                  id: repositoryText
-                  z: 2
-                  visible: !root.settingsMenuOpen
-                    && resultRow.repository !== ""
-                  width: parent.width
-                  text: resultRow.repository
-                  textFormat: Text.PlainText
-                  color: resultRow.selected ? root.selectedText : root.foreground
-                  opacity: repositoryMouse.containsMouse ? 0.90 : 0.48
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                  font.underline: repositoryMouse.containsMouse
-                  elide: Text.ElideRight
-                  horizontalAlignment: Text.AlignLeft
+                  readonly property bool selected: index === root.selectedIndex
+                  width: ListView.view.width
+                  height: root.rowHeight
+                  radius: Style.cornerRadius
+                  color: selected ? root.selectedBackground : "transparent"
 
                   MouseArea {
-                    id: repositoryMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onEntered: root.select(resultRow.index)
-                    onClicked: root.openWebsite(resultRow.repository)
+                    onClicked: {
+                      root.select(resultRow.index)
+                      root.activateIndex(resultRow.index)
+                    }
                   }
+
+                  Column {
+                    anchors.left: parent.left
+                    anchors.leftMargin: Style.spacing.md
+                    anchors.right: badgeColumn.left
+                    anchors.rightMargin: Style.spacing.sm
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(2)
+
+                    Row {
+                      width: parent.width
+                      spacing: Style.spacing.sm
+                      Text {
+                        width: Math.min(implicitWidth, parent.width
+                          * (root.settingsMenuOpen ? 1 : 0.52))
+                        text: resultRow.pluginName
+                        textFormat: Text.PlainText
+                        color: resultRow.selected ? root.selectedText : root.foreground
+                        font.family: Style.font.menuFamily
+                        font.pixelSize: Style.font.title
+                        font.bold: true
+                        elide: Text.ElideRight
+                      }
+                      Text {
+                        visible: !root.settingsMenuOpen
+                        width: parent.width - x
+                        text: resultRow.pluginId
+                        textFormat: Text.PlainText
+                        color: resultRow.selected ? root.selectedText : root.foreground
+                        opacity: 0.60
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                        elide: Text.ElideRight
+                      }
+                    }
+
+                    Text {
+                      width: parent.width
+                      text: root.settingsMenuOpen ? resultRow.description
+                        : resultRow.author + " - "
+                          + (resultRow.description || resultRow.kind)
+                      textFormat: Text.PlainText
+                      color: resultRow.selected ? root.selectedText : root.foreground
+                      opacity: 0.65
+                      font.family: Style.font.menuFamily
+                      font.pixelSize: Style.font.body
+                      elide: Text.ElideRight
+                      horizontalAlignment: Text.AlignLeft
+                    }
+
+                    Text {
+                      id: repositoryText
+                      z: 2
+                      visible: !root.settingsMenuOpen
+                        && resultRow.repository !== ""
+                      width: parent.width
+                      text: resultRow.repository
+                      textFormat: Text.PlainText
+                      color: resultRow.selected ? root.selectedText : root.foreground
+                      opacity: repositoryMouse.containsMouse ? 0.90 : 0.48
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.underline: repositoryMouse.containsMouse
+                      elide: Text.ElideRight
+                      horizontalAlignment: Text.AlignLeft
+
+                      MouseArea {
+                        id: repositoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onEntered: root.select(resultRow.index)
+                        onClicked: root.openWebsite(resultRow.repository)
+                      }
+                    }
+                  }
+
+                  Column {
+                    id: badgeColumn
+                    visible: !root.settingsMenuOpen
+                    anchors.right: parent.right
+                    anchors.rightMargin: Style.spacing.md
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: visible ? Style.space(178) : 0
+                    spacing: Style.space(2)
+
+                    Text {
+                      width: parent.width
+                      text: resultRow.stateLabel
+                        + (resultRow.version ? "  " + resultRow.version : "")
+                        + (resultRow.releaseTag ? "  " + resultRow.releaseTag : "")
+                      textFormat: Text.PlainText
+                      color: resultRow.selected ? root.selectedText : root.foreground
+                      font.family: Style.font.menuFamily
+                      font.pixelSize: Style.font.body
+                      horizontalAlignment: Text.AlignRight
+                      elide: Text.ElideLeft
+                    }
+                    Text {
+                      width: parent.width
+                      text: resultRow.sourceLabel + (resultRow.warning
+                        ? " - " + resultRow.warning : "")
+                      textFormat: Text.PlainText
+                      color: resultRow.warning ? root.urgent
+                        : (resultRow.selected ? root.selectedText : root.foreground)
+                      opacity: resultRow.warning ? 1 : 0.55
+                      font.family: Style.font.menuFamily
+                      font.pixelSize: Style.font.body
+                      horizontalAlignment: Text.AlignRight
+                      elide: Text.ElideRight
+                    }
+                  }
+
                 }
               }
+            }
 
-              Column {
-                id: badgeColumn
-                visible: !root.settingsMenuOpen
-                anchors.right: parent.right
-                anchors.rightMargin: Style.spacing.md
-                anchors.verticalCenter: parent.verticalCenter
-                width: visible ? Style.space(178) : 0
-                spacing: Style.space(2)
-
-                Text {
-                  width: parent.width
-                  text: resultRow.stateLabel
-                    + (resultRow.version ? "  " + resultRow.version : "")
-                    + (resultRow.releaseTag ? "  " + resultRow.releaseTag : "")
-                  textFormat: Text.PlainText
-                  color: resultRow.selected ? root.selectedText : root.foreground
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.body
-                  horizontalAlignment: Text.AlignRight
-                  elide: Text.ElideLeft
-                }
-                Text {
-                  width: parent.width
-                  text: resultRow.sourceLabel + (resultRow.warning
-                    ? " - " + resultRow.warning : "")
-                  textFormat: Text.PlainText
-                  color: resultRow.warning ? root.urgent
-                    : (resultRow.selected ? root.selectedText : root.foreground)
-                  opacity: resultRow.warning ? 1 : 0.55
-                  font.family: Style.font.menuFamily
-                  font.pixelSize: Style.font.body
-                  horizontalAlignment: Text.AlignRight
-                  elide: Text.ElideRight
-                }
-              }
-
+            PreviewPane {
+              id: previewPane
+              width: root.previewPaneWidth
+              height: parent.height
+              visible: root.previewPaneVisible
+              record: root.selectedRecord
+              service: root.service
+              foreground: root.foreground
             }
           }
 

@@ -13,6 +13,7 @@ if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
 fi
 "$qmllint_bin" -I /usr/share/omarchy/shell \
   "$ROOT/Service.qml" "$ROOT/PluginControl.qml" "$ROOT/ActionDialog.qml" \
+  "$ROOT/PreviewPane.qml" \
   "$ROOT/PluginControlBar.qml" \
   "$ROOT/lib/shortcuts/HyprlandBinding.qml"
 printf 'ok - QML lint\n'
