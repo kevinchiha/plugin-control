@@ -38,10 +38,23 @@ Start typing to search plugin names, IDs, descriptions, authors, and tags. Enter
 opens the selected plugin's available action; Ctrl+I shows details without
 changing anything.
 
-Use either command to narrow the action first:
+Enter toggles anything the shell reports as present and switchable, whether it
+ships with Omarchy or you installed it yourself. Removal is destructive, so it
+stays behind `plug-remove:`. Bars are neither: they are replaced rather than
+switched off, and the shell marks them as such.
+
+Filter with the chips under the search field, or type the command directly —
+they are the same thing, since a chip writes its command into the field:
 
 - `plug-install:` shows available installable plugins
 - `plug-remove:` shows removable local plugins
+- `plug-builtin:` shows the plugins that ship with Omarchy
+- `plug-mine:` shows the plugins you installed or cloned yourself
+- `plug-disabled:` shows everything switched off, whatever its origin
+- `plug-type: <kind>` filters by kind — bar widget, panel, service, overlay
+
+`plug-type:` takes a value, so its chip steps through the kinds and clears on
+the step past the last. Either spelling works: `bar widget` or `bar-widget`.
 
 Commands are not pinned. Type `install`, `remove`, `plug-in`, or `plg-in` to
 bring one forward, then press Tab or Enter to complete it. Search restarts after
