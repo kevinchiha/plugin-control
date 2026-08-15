@@ -60,7 +60,8 @@ test("settings mapping is required") do
 end
 
 test("every settings field is required") do
-  assert_invalid(default_text.sub("settings:\n  tray-icon-hidden: false",
+  assert_invalid(default_text.sub(
+    "settings:\n  tray-icon-hidden: false\n  preview-pane-hidden: false",
     "settings: {}"),
     "settings.tray-icon-hidden must be true or false")
 end
@@ -136,4 +137,25 @@ end
 test("arbitrary command fields fail") do
   assert_invalid(default_text.sub("    catalog_url:",
     "    install_command: curl bad | bash\n    catalog_url:"), "unknown")
+end
+
+test("preview pane defaults to visible") do
+  config = PluginControl.load_file(DEFAULT)
+  assert_equal false, config.dig("settings", "preview-pane-hidden")
+end
+
+test("preview pane can be hidden") do
+  config = parse(default_text.sub("preview-pane-hidden: false",
+    "preview-pane-hidden: true"))
+  assert_equal true, config.dig("settings", "preview-pane-hidden")
+end
+
+test("preview pane setting must be boolean") do
+  assert_invalid(default_text.sub("preview-pane-hidden: false",
+    "preview-pane-hidden: sometimes"), "true or false")
+end
+
+test("preview pane setting is optional") do
+  config = parse(default_text.sub("\n  preview-pane-hidden: false", ""))
+  assert_equal false, config.dig("settings", "preview-pane-hidden")
 end
