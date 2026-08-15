@@ -200,3 +200,22 @@ refresh_catalog_channel "$ROOT" "$channel"
 jq -e '.ok == true and (.records | length) == 0' \
   "$CHANNEL_CACHE/marketplace.json" >/dev/null
 printf 'ok - valid empty catalog clears stale records\n'
+
+download_catalog() {
+  jq '.plugins[0].previewThumbnail = "assets/img/plugins/a-card.webp"' \
+    "$TEST_DIR/fixtures/catalog-valid.json" >"$2"
+  : >"$3"
+  printf '200\n'
+}
+channel_with_site="$(jq -c '. + {website_url:"https://omarchyplugins.com/"}' \
+  <<<"$channel")"
+refresh_catalog_channel "$ROOT" "$channel_with_site"
+jq -e '.records[0].previewThumbnail
+  == "https://omarchyplugins.com/assets/img/plugins/a-card.webp"' \
+  "$CHANNEL_CACHE/marketplace.json" >/dev/null
+printf 'ok - refresh resolves previews against the channel website\n'
+
+refresh_catalog_channel "$ROOT" "$channel"
+jq -e '.records[0].previewThumbnail == ""' \
+  "$CHANNEL_CACHE/marketplace.json" >/dev/null
+printf 'ok - a channel without a website produces no previews\n'

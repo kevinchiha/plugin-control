@@ -237,10 +237,12 @@ normalize_catalog() {
   local channel_name="$3"
   local source="$4"
   local rank="$5"
+  local preview_base="${6:-}"
   jq -c \
     --arg channelName "$channel_name" \
     --arg channelSource "$source" \
     --argjson channelRank "$rank" \
+    --arg previewBase "$preview_base" \
     -f "$root/lib/catalog.jq" "$raw"
 }
 
@@ -270,10 +272,11 @@ download_catalog() {
 refresh_catalog_channel() {
   local root="$1"
   local channel="$2"
-  local channel_id channel_name source rank url
+  local channel_id channel_name source rank url website
   channel_id="$(jq -r '.id' <<<"$channel")"
   channel_name="$(jq -r '.name' <<<"$channel")"
   url="$(jq -r '.catalog_url' <<<"$channel")"
+  website="$(jq -r '.website_url // ""' <<<"$channel")"
   valid_channel_id "$channel_id" || return 1
 
   if [[ $channel_id == marketplace ]]; then
@@ -307,7 +310,7 @@ refresh_catalog_channel() {
 
   local normalized
   normalized="$(normalize_catalog "$root" "$body" \
-    "$channel_name" "$source" "$rank" 2>/dev/null)" || {
+    "$channel_name" "$source" "$rank" "$website" 2>/dev/null)" || {
     rm -rf -- "$stage"
     return 1
   }
