@@ -22,6 +22,10 @@ Item {
   property bool refreshing: false
   property bool actionStarting: false
   property bool animationsEnabled: true
+  property bool previewPaneHidden: false
+  property var previewPaths: ({})
+  property var previewFailed: ({})
+  property var previewQueue: []
   property string lastError: ""
   property string lastRefreshError: ""
   property string lastSuccessfulRefresh: ""
@@ -52,6 +56,7 @@ Item {
   readonly property string moduleName: "io.github.ilyazar.plugin-control"
 
   signal actionFinished(var state)
+  signal previewReady(string url, string path)
 
   function parseJson(raw, fallback) {
     try { return JSON.parse(String(raw || "")) } catch (error) { return fallback }
@@ -78,6 +83,8 @@ Item {
     if (!parsed || parsed.ok !== true || parsed.usingLastGood === true
         || !parsed.config || parsed.config.version !== 2) return false
     var settings = parsed.config.settings
+    var previewHidden = settings ? settings["preview-pane-hidden"] : undefined
+    if (typeof previewHidden === "boolean") previewPaneHidden = previewHidden
     var value = settings ? settings["tray-icon-hidden"] : undefined
     if (typeof value !== "boolean") return false
     if (!pluginRegistry
@@ -151,6 +158,58 @@ Item {
     statusProcess.output = ""
     statusProcess.command = [helperPath, "status"]
     statusProcess.running = true
+  }
+
+  function previewPathFor(url) {
+    var key = String(url || "")
+    if (!key) return ""
+    return String(previewPaths[key] || "")
+  }
+
+  function requestPreview(url) {
+    var key = String(url || "")
+    if (!key || previewPaneHidden || !helperPath) return
+    if (key.indexOf("https://") !== 0) return
+    if (previewPaths[key] || previewFailed[key]) return
+    if (previewProcess.currentUrl === key) return
+    if (previewQueue.indexOf(key) >= 0) return
+    var queue = previewQueue.slice()
+    queue.push(key)
+    while (queue.length > 12) queue.shift()
+    previewQueue = queue
+    startNextPreview()
+  }
+
+  function startNextPreview() {
+    if (!helperPath || previewProcess.running) return
+    if (previewQueue.length === 0) return
+    var queue = previewQueue.slice()
+    var next = queue.shift()
+    previewQueue = queue
+    previewProcess.output = ""
+    previewProcess.currentUrl = next
+    previewProcess.command = [helperPath, "preview", sourceDir, next]
+    previewProcess.running = true
+  }
+
+  function acceptPreview(raw) {
+    var url = String(previewProcess.currentUrl || "")
+    previewProcess.currentUrl = ""
+    var parsed = parseJson(raw, null)
+    var key
+    if (parsed && parsed.ok === true && String(parsed.path || "")) {
+      var paths = ({})
+      for (key in previewPaths) paths[key] = previewPaths[key]
+      paths[url] = String(parsed.path)
+      previewPaths = paths
+      previewReady(url, paths[url])
+    } else if (url) {
+      var failed = ({})
+      for (key in previewFailed) failed[key] = previewFailed[key]
+      failed[url] = true
+      previewFailed = failed
+    }
+    Qt.callLater(startNextPreview)
   }
 
   function acceptStatus(raw) {
@@ -324,6 +383,17 @@ Item {
       onStreamFinished: statusProcess.output = text
     }
     onExited: root.acceptStatus(output)
+  }
+
+  Process {
+    id: previewProcess
+    property string output: ""
+    property string currentUrl: ""
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: previewProcess.output = text
+    }
+    onExited: root.acceptPreview(output)
   }
 
   Process {
