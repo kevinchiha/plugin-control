@@ -1067,7 +1067,7 @@ Item {
               width: root.previewPaneWidth
               height: parent.height
               visible: root.previewPaneVisible
-              record: root.selectedRecord
+              record: root.shortcutRecord
               service: root.service
               foreground: root.foreground
             }

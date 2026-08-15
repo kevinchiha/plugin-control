@@ -58,6 +58,7 @@ rg -q 'commandCompletion' "$ROOT/PluginControl.qml"
 rg -q 'function clearCompletedCommandPrefix()' "$ROOT/PluginControl.qml"
 rg -Fq 'repository: String(record.repository' "$ROOT/PluginControl.qml"
 rg -Fq 'font.pixelSize: Style.font.caption' "$ROOT/PluginControl.qml"
+rg -Fq 'record: root.shortcutRecord' "$ROOT/PluginControl.qml"
 rg -q 'pendingSnapshotId = pendingOperation === "browse"' \
   "$ROOT/PluginControl.qml"
 rg -q 'String\(selectedRecord.id || ""\), pendingSnapshotId' \
