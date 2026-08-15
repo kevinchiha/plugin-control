@@ -57,6 +57,48 @@ jq -e '.records[0].builtIn == false and .records[0].source == "custom"' \
   <<<"$custom" >/dev/null
 printf 'ok - custom catalogs cannot impersonate native built-ins\n'
 
+normalize_preview() {
+  jq -c --arg channelName "Omarchy Plugins Marketplace" \
+    --arg channelSource marketplace --argjson channelRank 30 \
+    --arg previewBase "https://omarchyplugins.com/" \
+    -f "$ROOT/lib/catalog.jq" "$1"
+}
+
+preview="$(normalize_preview "$TEST_DIR/fixtures/catalog-preview.json")"
+jq -e '(.records | length) == 7 and (.errors | length) == 0' \
+  <<<"$preview" >/dev/null
+jq -e '.records[0].previewThumbnail
+  == "https://omarchyplugins.com/assets/img/plugins/a-card.webp"' \
+  <<<"$preview" >/dev/null
+jq -e '.records[0].previewImage
+  == "https://omarchyplugins.com/assets/img/plugins/a-detail.webp"' \
+  <<<"$preview" >/dev/null
+jq -e '.records[0].previewThumbnailWidth == 720
+  and .records[0].previewThumbnailHeight == 405
+  and .records[0].previewWidth == 1600
+  and .records[0].previewHeight == 900' <<<"$preview" >/dev/null
+jq -e '.records[0].stars == 13 and .records[0].license == "MIT"
+  and .records[0].repositoryUpdatedAt == "2026-08-11T17:06:54Z"' \
+  <<<"$preview" >/dev/null
+printf 'ok - preview fields resolve against the channel website\n'
+
+jq -e '[.records[1:6][] | .previewThumbnail] | all(. == "")' \
+  <<<"$preview" >/dev/null
+jq -e '[.records[1:6][] | .id] | length == 5' <<<"$preview" >/dev/null
+printf 'ok - unsafe preview paths blank the picture without hiding the plugin\n'
+
+jq -e '.records[6].previewThumbnail != ""
+  and .records[6].previewThumbnailWidth == 0
+  and .records[6].stars == 0' <<<"$preview" >/dev/null
+printf 'ok - out of range preview numbers fall back to zero\n'
+
+no_base="$(jq -c --arg channelName Custom --arg channelSource custom \
+  --argjson channelRank 10 -f "$ROOT/lib/catalog.jq" \
+  "$TEST_DIR/fixtures/catalog-preview.json")"
+jq -e '[.records[] | .previewThumbnail] | all(. == "")' \
+  <<<"$no_base" >/dev/null
+printf 'ok - previews need a channel website to resolve\n'
+
 export HOME="$TEMP_ROOT/home"
 export XDG_CONFIG_HOME="$TEMP_ROOT/config"
 export XDG_CACHE_HOME="$TEMP_ROOT/cache"

@@ -24,6 +24,36 @@ def valid_tags:
       and length <= 30
       and all(.[]; safe_string(80)));
 
+def valid_preview_path:
+  type == "string"
+  and length > 0
+  and length <= 512
+  and (test("[[:cntrl:]]") | not)
+  and test("^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+  and (contains("..") | not)
+  and (ascii_downcase | test("\\.(webp|png|jpg|jpeg|gif)$"));
+
+def preview_base:
+  ($ARGS.named.previewBase // "")
+  | if type == "string"
+      and length <= 2048
+      and test("^https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$")
+    then sub("/+$"; "")
+    else ""
+    end;
+
+def preview_url($key):
+  (preview_base) as $base
+  | if $base == "" then ""
+    elif ((.[$key] // null) | type) != "string" then ""
+    elif (.[$key] | valid_preview_path | not) then ""
+    else $base + "/" + .[$key]
+    end;
+
+def bounded_number($key; $maximum):
+  (.[$key] // 0)
+  | if type == "number" and . >= 0 and . <= $maximum then floor else 0 end;
+
 def valid_release:
   (.repositoryRelease == null)
   or (.repositoryRelease | type == "object"
@@ -48,6 +78,8 @@ def row_valid:
   and optional_string("listingValidatedCommit"; 80)
   and optional_string("upstreamObservedCommit"; 80)
   and optional_string("upstreamCheckStatus"; 80)
+  and optional_string("license"; 120)
+  and optional_string("repositoryUpdatedAt"; 64)
   and ((.sourceType // "") | IN("builtin", "community"))
   and valid_tags
   and valid_release;
@@ -86,7 +118,16 @@ def normalized_record($channel_name; $channel_source; $channel_rank):
       listingValidatedCommit: (.listingValidatedCommit // ""),
       upstreamObservedCommit: (.upstreamObservedCommit // ""),
       upstreamCheckStatus: (.upstreamCheckStatus // "unknown"),
-      releaseTag: (.repositoryRelease.tag // "")
+      releaseTag: (.repositoryRelease.tag // ""),
+      license: (.license // ""),
+      stars: bounded_number("stars"; 1000000),
+      repositoryUpdatedAt: (.repositoryUpdatedAt // ""),
+      previewThumbnail: preview_url("previewThumbnail"),
+      previewImage: preview_url("previewImage"),
+      previewThumbnailWidth: bounded_number("previewThumbnailWidth"; 10000),
+      previewThumbnailHeight: bounded_number("previewThumbnailHeight"; 10000),
+      previewWidth: bounded_number("previewWidth"; 10000),
+      previewHeight: bounded_number("previewHeight"; 10000)
     };
 
 if type != "object" then

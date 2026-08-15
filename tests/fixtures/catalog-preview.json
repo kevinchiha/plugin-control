@@ -1,0 +1,58 @@
+{
+  "stateSchemaVersion": 1,
+  "generatedAt": "2026-08-15T00:00:00Z",
+  "plugins": [
+    {
+      "id": "preview.good",
+      "name": "Good preview",
+      "sourceType": "community",
+      "previewThumbnail": "assets/img/plugins/a-card.webp",
+      "previewImage": "assets/img/plugins/a-detail.webp",
+      "previewThumbnailWidth": 720,
+      "previewThumbnailHeight": 405,
+      "previewWidth": 1600,
+      "previewHeight": 900,
+      "stars": 13,
+      "license": "MIT",
+      "repositoryUpdatedAt": "2026-08-11T17:06:54Z"
+    },
+    {
+      "id": "preview.absolute",
+      "name": "Absolute URL",
+      "sourceType": "community",
+      "previewThumbnail": "https://evil.example/x.png"
+    },
+    {
+      "id": "preview.traversal",
+      "name": "Traversal",
+      "sourceType": "community",
+      "previewThumbnail": "assets/../../etc/passwd.png"
+    },
+    {
+      "id": "preview.control",
+      "name": "Control character",
+      "sourceType": "community",
+      "previewThumbnail": "assets/img\u0001/a.png"
+    },
+    {
+      "id": "preview.extension",
+      "name": "Wrong extension",
+      "sourceType": "community",
+      "previewThumbnail": "assets/img/a.svg"
+    },
+    {
+      "id": "preview.rooted",
+      "name": "Leading slash",
+      "sourceType": "community",
+      "previewThumbnail": "/assets/img/a.png"
+    },
+    {
+      "id": "preview.numbers",
+      "name": "Out of range numbers",
+      "sourceType": "community",
+      "previewThumbnail": "assets/img/plugins/b-card.webp",
+      "previewThumbnailWidth": 99999,
+      "stars": -5
+    }
+  ]
+}
