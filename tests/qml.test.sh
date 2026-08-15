@@ -167,6 +167,8 @@ grep -Fq 'PLUGIN_CONTROL_LOAD_OK overlay' "$runtime_root/quickshell.log"
 grep -Fq 'PLUGIN_CONTROL_LOAD_OK bar-widget' "$runtime_root/quickshell.log"
 grep -Fq 'PLUGIN_CONTROL_INTERACTION_OK palette interactions' \
   "$runtime_root/quickshell.log"
+grep -Fq 'PLUGIN_CONTROL_INTERACTION_OK lightbox interactions' \
+  "$runtime_root/quickshell.log"
 if grep -Fq 'PLUGIN_CONTROL_LOAD_ERROR' "$runtime_root/quickshell.log"; then
   sed -n '1,240p' "$runtime_root/quickshell.log" >&2
   exit 1

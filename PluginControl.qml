@@ -586,6 +586,11 @@ Item {
 
   function handleKey(event) {
     if (root.lightboxOpen) {
+      if (isControlShortcut(event, Qt.Key_P)) {
+        root.closeLightbox()
+        dismiss()
+        return true
+      }
       if (event.key === Qt.Key_Escape || isControlShortcut(event, Qt.Key_E))
         root.closeLightbox()
       return true

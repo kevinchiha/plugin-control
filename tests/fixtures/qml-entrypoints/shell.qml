@@ -88,6 +88,18 @@ ShellRoot {
     if (!overlay.handleKey(ctrlE) || overlay.lightboxOpen)
       console.error("PLUGIN_CONTROL_LOAD_ERROR ctrl+e closes lightbox")
 
+    // Ctrl+P is not swallowed while the view is open: it closes the view
+    // and dismisses the whole palette in a single press.
+    overlay.filteredRecords = [imageRecord]
+    overlay.selectedIndex = 0
+    overlay.lightboxOpen = false
+    if (!overlay.handleKey(ctrlE) || !overlay.lightboxOpen)
+      console.error("PLUGIN_CONTROL_LOAD_ERROR ctrl+p setup reopen")
+    var ctrlP = { modifiers: Qt.ControlModifier, key: Qt.Key_P }
+    if (!overlay.handleKey(ctrlP) || overlay.lightboxOpen || overlay.opened) {
+      console.error("PLUGIN_CONTROL_LOAD_ERROR ctrl+p closes view and dismisses")
+    }
+
     console.log("PLUGIN_CONTROL_INTERACTION_OK lightbox interactions")
   }
 
