@@ -181,6 +181,10 @@ Item {
   }
 
   function startNextPreview() {
+    if (previewPaneHidden) {
+      if (previewQueue.length > 0) previewQueue = []
+      return
+    }
     if (!helperPath || previewProcess.running) return
     if (previewQueue.length === 0) return
     var queue = previewQueue.slice()
