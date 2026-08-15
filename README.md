@@ -74,9 +74,33 @@ Useful keys:
 | `Ctrl+U`                                   | Clear the query                             |
 | `Ctrl+R`                                   | Refresh the catalog                         |
 | `Ctrl+I`                                   | Show details for the selected plugin        |
+| `Ctrl+E`                                   | Enlarge the screenshot of the selection     |
 | `Ctrl+W`                                   | Open the plugin website                     |
 | `Ctrl+G`                                   | Open the plugin source repository           |
 | `Ctrl+S`                                   | Open settings; `Escape` returns to the list |
+
+## Screenshots
+
+Marketplace listings carry their own screenshots, so the palette shows one for
+the selected plugin beside the results. The pane only appears when the
+palette has room for it; on a narrow screen it does not appear at all.
+Plugins with no screenshot show `No screenshot`, and Omarchy's built-in
+plugins have none.
+
+Marketplace screenshots are WebP files. A Qt install without WebP support
+shows `Can't display image` instead of the picture; on Arch, the
+`qt6-imageformats` package adds the missing decoder.
+
+Pictures are fetched only from the website of a channel you have enabled.
+Redirects are refused outright, so a picture served via a redirect will not
+load. Downloads are cached under `~/.cache/omarchy/plugin-control/previews/`,
+capped at 400 files with the oldest evicted first.
+
+`Ctrl+E` or a click on the picture enlarges it; `Escape` closes it. While the
+enlarged view is open, the palette ignores every other key except `Ctrl+P`,
+which closes the view and dismisses the palette in one press.
+
+Hide the pane, and stop all picture downloads, with `preview-pane-hidden`.
 
 ## Install behavior
 
@@ -113,6 +137,7 @@ arrows, mouse, or Enter; Escape returns to the plugin list.
 ```yaml
 settings:
   tray-icon-hidden: false
+  preview-pane-hidden: false
 ```
 
 Plugin Control never rewrites the user-owned Ctrl+P binding. Its other shortcuts

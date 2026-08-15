@@ -47,6 +47,7 @@ Item {
   }
 
   Image {
+    id: fullImage
     anchors.centerIn: parent
     width: Math.min(parent.width * 0.9, implicitWidth)
     height: Math.min(parent.height * 0.9, implicitHeight)
@@ -58,8 +59,13 @@ Item {
 
   Text {
     anchors.centerIn: parent
-    visible: root.imagePath === ""
-    text: "Loading…"
+    width: parent.width * 0.6
+    horizontalAlignment: Text.AlignHCenter
+    wrapMode: Text.Wrap
+    visible: root.imagePath === "" || fullImage.status === Image.Error
+    text: root.imagePath === "" ? "Loading…"
+      : "This image format isn't supported by the Qt image plugins installed on this system."
+    textFormat: Text.PlainText
     color: root.foreground
     opacity: 0.65
     font.family: Style.font.menuFamily

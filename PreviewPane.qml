@@ -75,6 +75,7 @@ Item {
       clip: true
 
       Image {
+        id: previewImage
         anchors.fill: parent
         source: root.hasImage ? "file://" + root.imagePath : ""
         visible: root.hasImage && status === Image.Ready
@@ -86,8 +87,11 @@ Item {
 
       Text {
         anchors.centerIn: parent
-        visible: !root.hasImage
-        text: root.thumbnailUrl ? "Loading…" : "No screenshot"
+        visible: !root.hasImage || previewImage.status === Image.Error
+        text: {
+          if (!root.hasImage) return root.thumbnailUrl ? "Loading…" : "No screenshot"
+          return "Can't display image"
+        }
         color: root.foreground
         opacity: 0.45
         font.family: Style.font.menuFamily
