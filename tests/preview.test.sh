@@ -33,6 +33,7 @@ for argument in "$@"; do
   previous="$argument"
 done
 [[ -n $output ]] || exit 1
+sleep "${MOCK_CURL_SLEEP:-0}"
 case "${MOCK_CURL_BODY:-png}" in
   png) printf '\x89PNG\r\n\x1a\n' >"$output" ;;
   webp) printf 'RIFF\x10\x00\x00\x00WEBPVP8 ' >"$output" ;;
@@ -51,18 +52,44 @@ load_config "$ROOT" >/dev/null
 
 card="https://omarchyplugins.com/assets/img/plugins/a-card.webp"
 
-preview_command "$ROOT" "http://omarchyplugins.com/a.png" \
+{ preview_command "$ROOT" "http://omarchyplugins.com/a.png" || true; } \
   | jq -e '.ok == false' >/dev/null
-preview_command "$ROOT" "https://omarchyplugins.com/a.svg" \
+{ preview_command "$ROOT" "https://omarchyplugins.com/a.svg" || true; } \
   | jq -e '.ok == false' >/dev/null
-preview_command "$ROOT" "https://omarchyplugins.com/a.png?x=1" \
+{ preview_command "$ROOT" "https://omarchyplugins.com/a.png?x=1" || true; } \
   | jq -e '.ok == false' >/dev/null
 printf 'ok - unsupported preview addresses are rejected\n'
 
-preview_command "$ROOT" "https://evil.example/a.png" \
+{ preview_command "$ROOT" "https://evil.example/a.png" || true; } \
   | jq -e '.ok == false and (.error | contains("channel"))' >/dev/null
 [[ ! -s $MOCK_CURL_LOG ]]
 printf 'ok - preview hosts outside the enabled channels never reach curl\n'
+
+# A disabled channel's website must never authorize its host, even though
+# the shipped config has no disabled channel with a website_url to exercise
+# this with. Add one to the test's own config file.
+cat >>"$CONFIG_ROOT/channels.yaml" <<'YAML'
+  - id: disabled-with-site
+    name: Disabled channel with a website
+    type: marketplace-catalog
+    enabled: false
+    catalog_url: https://disabled.example/catalog.json
+    website_url: https://disabled.example/
+YAML
+{ preview_command "$ROOT" "https://disabled.example/a.png" || true; } \
+  | jq -e '.ok == false and (.error | contains("channel"))' >/dev/null
+[[ ! -s $MOCK_CURL_LOG ]]
+printf 'ok - a disabled channel with a website does not authorize its host\n'
+
+# A lookalike host that merely contains the allowed origin as a substring
+# (prefix or suffix) must not pass — the match has to be the full origin.
+{ preview_command "$ROOT" "https://omarchyplugins.com.evil.example/a.png" \
+  || true; } | jq -e '.ok == false and (.error | contains("channel"))' \
+  >/dev/null
+{ preview_command "$ROOT" "https://evilomarchyplugins.com/a.png" || true; } \
+  | jq -e '.ok == false and (.error | contains("channel"))' >/dev/null
+[[ ! -s $MOCK_CURL_LOG ]]
+printf 'ok - lookalike hosts containing the allowed origin are rejected\n'
 
 digest="$(printf '%s' "$card" | sha256sum | cut -d' ' -f1)"
 mkdir -p -- "$CACHE_ROOT/previews"
@@ -82,6 +109,9 @@ downloaded="$(jq -r '.path' <<<"$result")"
 [[ -s $downloaded ]]
 [[ $(stat -c '%a' -- "$downloaded") == 600 ]]
 grep -q -- "--proto =https" "$MOCK_CURL_LOG"
+grep -q -- "--proto-redir =https" "$MOCK_CURL_LOG"
+grep -q -- "--max-redirs 0" "$MOCK_CURL_LOG"
+grep -q -- "--max-filesize 4194304" "$MOCK_CURL_LOG"
 printf 'ok - an allowed preview is downloaded and cached\n'
 
 : >"$MOCK_CURL_LOG"
@@ -90,7 +120,7 @@ jq -e '.cached == true' <<<"$(preview_command "$ROOT" "$detail")" >/dev/null
 printf 'ok - the second request for the same preview is served from cache\n'
 
 html="https://omarchyplugins.com/assets/img/plugins/a-html.png"
-MOCK_CURL_BODY=html preview_command "$ROOT" "$html" \
+{ MOCK_CURL_BODY=html preview_command "$ROOT" "$html" || true; } \
   | jq -e '.ok == false' >/dev/null
 [[ -z $(find "$CACHE_ROOT/previews" -name '.preview.tmp.*' -print -quit) ]]
 [[ -z $(find "$CACHE_ROOT/previews" -name "$(printf '%s' "$html" \
@@ -98,7 +128,7 @@ MOCK_CURL_BODY=html preview_command "$ROOT" "$html" \
 printf 'ok - a non-image body is discarded and leaves no cache entry\n'
 
 failing="https://omarchyplugins.com/assets/img/plugins/a-fail.png"
-MOCK_CURL_BODY=fail preview_command "$ROOT" "$failing" \
+{ MOCK_CURL_BODY=fail preview_command "$ROOT" "$failing" || true; } \
   | jq -e '.ok == false' >/dev/null
 printf 'ok - a failed download reports an error\n'
 
@@ -113,3 +143,37 @@ count="$(find "$filler" -maxdepth 1 -type f | wc -l)"
 (( count <= 400 ))
 [[ -s $filler/$(printf '%s' "$fresh" | sha256sum | cut -d ' ' -f 1).png ]]
 printf 'ok - the preview cache is trimmed to its limit, newest kept\n'
+
+concurrent="https://omarchyplugins.com/assets/img/plugins/a-concurrent.png"
+: >"$MOCK_CURL_LOG"
+(
+  MOCK_CURL_SLEEP=0.3 MOCK_CURL_BODY=png \
+    preview_command "$ROOT" "$concurrent" >"$TEMP_ROOT/concurrent-one.json"
+) &
+concurrent_pid_one=$!
+(
+  MOCK_CURL_SLEEP=0.3 MOCK_CURL_BODY=png \
+    preview_command "$ROOT" "$concurrent" >"$TEMP_ROOT/concurrent-two.json"
+) &
+concurrent_pid_two=$!
+wait "$concurrent_pid_one" "$concurrent_pid_two"
+jq -e '.ok == true' "$TEMP_ROOT/concurrent-one.json" >/dev/null
+jq -e '.ok == true' "$TEMP_ROOT/concurrent-two.json" >/dev/null
+curl_calls="$(grep -Fc -- "$concurrent" "$MOCK_CURL_LOG" || true)"
+[[ $curl_calls == 1 ]]
+printf 'ok - concurrent requests for the same preview issue exactly one download\n'
+
+canary="$TEMP_ROOT/canary.txt"
+printf 'do-not-touch\n' >"$canary"
+symlinked="https://omarchyplugins.com/assets/img/plugins/a-symlink.png"
+symlinked_digest="$(printf '%s' "$symlinked" | sha256sum | cut -d ' ' -f 1)"
+symlinked_target="$CACHE_ROOT/previews/$symlinked_digest.png"
+ln -s "$canary" "$symlinked_target"
+: >"$MOCK_CURL_LOG"
+result="$(MOCK_CURL_BODY=png preview_command "$ROOT" "$symlinked")"
+jq -e '.ok == true and .cached == false' <<<"$result" >/dev/null
+[[ -s $MOCK_CURL_LOG ]]
+[[ ! -L $symlinked_target ]]
+[[ -s $symlinked_target ]]
+[[ $(cat "$canary") == "do-not-touch" ]]
+printf 'ok - a symlinked cache entry is replaced instead of trusted or written through\n'

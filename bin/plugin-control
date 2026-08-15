@@ -331,7 +331,7 @@ preview_download() {
   directory="$(dirname -- "$target")"
   temporary="$(mktemp "$directory/.preview.tmp.XXXXXX")" || return 1
   if ! curl --fail --silent --show-error --location \
-    --proto '=https' --proto-redir '=https' --max-redirs 3 \
+    --proto '=https' --proto-redir '=https' --max-redirs 0 \
     --connect-timeout 5 --max-time 20 --max-filesize 4194304 \
     --header 'User-Agent: plugin-control/0.1.0' \
     --output "$temporary" -- "$url"; then
@@ -352,18 +352,32 @@ preview_download() {
 readonly PREVIEW_CACHE_LIMIT=400
 
 preview_evict() {
+  # $1, if given, is a path to exclude from deletion candidates (the file
+  # this call just wrote), so a clock skew that makes it look "oldest" can
+  # never get it evicted the moment after it lands. It still counts toward
+  # the cache-size total, so old files are trimmed enough to make room for
+  # it. In-flight ".preview.tmp.*" files from concurrent downloads are
+  # excluded from both the total and the candidates, always.
+  local keep="${1:-}"
   local directory count excess
   directory="$(preview_cache_dir)"
-  [[ -d $directory ]] || return 0
-  count="$(find "$directory" -maxdepth 1 -type f -printf '.' | wc -c)"
+  [[ -d $directory && ! -L $directory ]] || return 0
+  local -a base=("$directory" -maxdepth 1 -type f ! -name '.preview.tmp.*')
+  count="$(find "${base[@]}" -printf '.' | wc -c)"
   (( count > PREVIEW_CACHE_LIMIT )) || return 0
   excess=$(( count - PREVIEW_CACHE_LIMIT ))
-  find "$directory" -maxdepth 1 -type f -printf '%T@ %p\0' \
-    | sort -z -n \
+  local -a candidates=("${base[@]}")
+  [[ -z $keep ]] || candidates+=(! -path "$keep")
+  # The `|| true` covers find/sort taking SIGPIPE when `head -z` exits
+  # after reading $excess records and closes its input early; that is
+  # expected and does not mean the trim failed. It is scoped to just this
+  # stage — the trailing `while read` reaching EOF normally exits 0 and
+  # needs no such guard.
+  { find "${candidates[@]}" -printf '%T@\t%p\0' | sort -z -n || true; } \
     | head -z -n "$excess" \
-    | while IFS=' ' read -r -d '' _ path; do
+    | while IFS=$'\t' read -r -d '' _ path; do
       rm -f -- "$path"
-    done || true
+    done
 }
 
 preview_command() {
@@ -372,24 +386,44 @@ preview_command() {
   local extension digest target directory
   preview_url_valid "$url" || {
     json_error "unsupported preview address"
-    return
+    return 1
   }
   extension="$(preview_extension "$url")" || {
     json_error "unsupported preview image type"
-    return
+    return 1
   }
   preview_host_allowed "$root" "$url" || {
     json_error "preview host is not an enabled channel"
-    return
+    return 1
   }
   digest="$(printf '%s' "$url" | sha256sum | cut -d ' ' -f 1)"
   directory="$(preview_cache_dir)"
   target="$directory/$digest$extension"
-  mkdir -p -- "$directory"
+  if [[ -e $directory && ( -L $directory || ! -d $directory ) ]]; then
+    json_error "the preview cache directory is unavailable"
+    return 1
+  fi
+  mkdir -p -- "$directory" || {
+    json_error "could not prepare the preview cache directory"
+    return 1
+  }
+  if [[ ! -d $directory || -L $directory ]]; then
+    json_error "the preview cache directory is unavailable"
+    return 1
+  fi
   {
-    flock -w 10 11 || {
+    # Wait comfortably past preview_download's own --max-time ceiling (20s)
+    # so a slow-but-healthy sibling download is not mistaken for a stuck
+    # lock. If we still time out, re-check the cache before giving up: the
+    # sibling has usually finished and released the lock by then.
+    flock -w 25 11 || {
+      if [[ -f $target && ! -L $target && -s $target ]]; then
+        touch -- "$target"
+        jq -cn --arg path "$target" '{ok:true,path:$path,cached:true}'
+        return
+      fi
       json_error "another preview download is in progress"
-      return
+      return 1
     }
     if [[ -f $target && ! -L $target && -s $target ]]; then
       touch -- "$target"
@@ -398,11 +432,11 @@ preview_command() {
     fi
     preview_download "$url" "$target" || {
       json_error "could not download the preview"
-      return
+      return 1
     }
-    preview_evict
+    preview_evict "$target"
     jq -cn --arg path "$target" '{ok:true,path:$path,cached:false}'
-  } 11>"$RUNTIME_ROOT/preview-$digest.lock"
+  } 11>>"$RUNTIME_ROOT/preview-$digest.lock"
 }
 
 refresh_catalog_channel() {
