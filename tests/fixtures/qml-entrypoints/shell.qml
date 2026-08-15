@@ -220,6 +220,38 @@ ShellRoot {
               + toggleCases[t].id)
           }
         }
+        if (overlay.filterChips.length !== 6
+            || overlay.filterChips[0].mode !== "browse"
+            || overlay.filterChips[0].completion !== "") {
+          console.error("PLUGIN_CONTROL_LOAD_ERROR filter chip model")
+        }
+        overlay.applyFilter("plug-builtin: ")
+        if (overlay.query !== "plug-builtin: " || overlay.mode !== "builtin")
+          console.error("PLUGIN_CONTROL_LOAD_ERROR filter chip apply")
+        overlay.applyFilter("")
+        if (overlay.query !== "" || overlay.mode !== "browse")
+          console.error("PLUGIN_CONTROL_LOAD_ERROR filter chip clear")
+
+        var cycleKinds = ["bar widget", "panel", "service", "overlay"]
+        for (var c = 0; c < cycleKinds.length; c++) {
+          overlay.cycleTypeFilter()
+          if (overlay.query !== "plug-type: " + cycleKinds[c]) {
+            console.error("PLUGIN_CONTROL_LOAD_ERROR type cycle "
+              + cycleKinds[c])
+          }
+        }
+        overlay.cycleTypeFilter()
+        if (overlay.query !== "")
+          console.error("PLUGIN_CONTROL_LOAD_ERROR type cycle wrap")
+
+        if (overlay.footerModel.length !== 5)
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer model size")
+        if (overlay.activateFooter(-1) || overlay.activateFooter(5))
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer bounds")
+        if (!overlay.activateFooter(4) || overlay.settingsMenuOpen !== true)
+          console.error("PLUGIN_CONTROL_LOAD_ERROR footer settings action")
+        overlay.settingsMenuOpen = false
+
         overlay.query = "plug-in"
         if (overlay.mode !== "command"
             || overlay.filteredRecords.length < 1

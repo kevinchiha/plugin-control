@@ -58,11 +58,14 @@ Item {
   readonly property int rowHeight: Style.space(60)
   readonly property int headerHeight: Style.space(52)
   readonly property int footerHeight: Style.space(42)
+  readonly property int filterRowHeight: Style.space(34)
   readonly property bool paletteChromeVisible: !settingsMenuOpen
   readonly property int activeHeaderHeight: paletteChromeVisible
     ? headerHeight : 0
   readonly property int activeFooterHeight: paletteChromeVisible
     ? footerHeight : 0
+  readonly property int activeFilterRowHeight: paletteChromeVisible
+    ? filterRowHeight : 0
   readonly property int statusHeight: paletteChromeVisible
     && statusText.length > 0 ? Style.space(28) : 0
   readonly property int visibleRows: Math.max(1,
@@ -70,9 +73,9 @@ Item {
   readonly property int resultRowsHeight: visibleRows * rowHeight
     + Math.max(0, visibleRows - 1) * Style.space(2)
   readonly property int chromeSpacingCount: paletteChromeVisible
-    ? (statusHeight > 0 ? 3 : 2) : 0
+    ? (statusHeight > 0 ? 4 : 3) : 0
   readonly property int desiredCardHeight: Style.spacing.panelPadding * 2
-    + activeHeaderHeight + resultRowsHeight
+    + activeHeaderHeight + activeFilterRowHeight + resultRowsHeight
     + activeFooterHeight + statusHeight
     + Style.spacing.sm * chromeSpacingCount
   readonly property int cardHeight: Math.min(Style.space(500),
@@ -265,6 +268,77 @@ Item {
     if (record.installed === true && record.removable === true) return "remove"
     if (record.installable === true) return "install"
     return "browse"
+  }
+
+  // Chips write their command into the query field rather than holding filter
+  // state of their own, so clicking and typing drive the same one mechanism
+  // and cannot drift apart.
+  readonly property var filterChips: [
+    { label: "All", mode: "browse", completion: "" },
+    { label: "Available", mode: "install", completion: "plug-install: " },
+    { label: "Mine", mode: "mine", completion: "plug-mine: " },
+    { label: "Built-in", mode: "builtin", completion: "plug-builtin: " },
+    { label: "Disabled", mode: "disabled", completion: "plug-disabled: " },
+    { label: "Type", mode: "type", completion: "plug-type: " }
+  ]
+  readonly property var typeFilterKinds: [
+    "bar widget", "panel", "service", "overlay"
+  ]
+  readonly property string activeTypeKind: mode === "type"
+    ? String(Fuzzy.parseQuery(query).query || "").trim() : ""
+
+  function applyFilter(completion) {
+    queryInput.text = String(completion || "")
+    queryInput.cursorPosition = queryInput.text.length
+    queryInput.forceActiveFocus()
+    return true
+  }
+
+  // Unlike the boolean filters, a kind filter needs a value, so the chip steps
+  // through the kinds and the step past the last one clears the filter.
+  function cycleTypeFilter() {
+    var next = 0
+    if (mode === "type") {
+      var active = String(Fuzzy.parseQuery(queryInput.text).query || "")
+        .toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()
+      next = typeFilterKinds.indexOf(active) + 1
+      if (next >= typeFilterKinds.length) return applyFilter("")
+    }
+    return applyFilter("plug-type: " + typeFilterKinds[next])
+  }
+
+  readonly property var footerModel: [
+    { keyLabel: "[Ctrl+I]", label: "Info" },
+    { keyLabel: "[Ctrl+W]", label: root.marketplaceShortcutLabel },
+    { keyLabel: "[Ctrl+G]", label: "GitHub source" },
+    { keyLabel: "[Ctrl+R]", label: "Refresh" },
+    { keyLabel: "[Ctrl+S]", label: "Settings" }
+  ]
+
+  readonly property string emptyStateText: {
+    if (mode === "install") return "No installable plugins match this query"
+    if (mode === "remove") return "No removable local plugins match this query"
+    if (mode === "builtin") return "No built-in plugins match this query"
+    if (mode === "mine") return "No plugins of your own match this query"
+    if (mode === "disabled") return "No plugins are switched off"
+    if (mode === "type") return "No plugins of that kind"
+    if (mode === "command") return "No command matches this query"
+    return "No plugins match this query"
+  }
+
+  function requestCatalogRefresh() {
+    transientMessage = ""
+    if (service) service.requestRefresh(true)
+  }
+
+  function activateFooter(index) {
+    if (index < 0 || index >= footerModel.length) return false
+    if (index === 0) openSelectedInfo()
+    else if (index === 1) openMarketplaceShortcut()
+    else if (index === 2) openGithubShortcut()
+    else if (index === 3) requestCatalogRefresh()
+    else openSettings()
+    return true
   }
 
   function completeCommand(index) {
@@ -496,8 +570,7 @@ Item {
     } else if (isControlShortcut(event, Qt.Key_S)) {
       openSettings()
     } else if (isControlShortcut(event, Qt.Key_R)) {
-      transientMessage = ""
-      if (service) service.requestRefresh(true)
+      requestCatalogRefresh()
     } else if (isControlShortcut(event, Qt.Key_U)) {
       queryInput.text = ""
     } else if (isControlShortcut(event, Qt.Key_Backspace)) {
@@ -703,7 +776,7 @@ Item {
             Text {
               visible: !queryInput.text
               anchors.fill: parent
-              text: "Search plugins or type plug-install: / plug-remove:"
+              text: "Search plugins, click a filter, or type plug-"
               textFormat: Text.PlainText
               color: root.foreground
               opacity: 0.48
@@ -727,10 +800,66 @@ Item {
         }
 
         Item {
+          visible: root.paletteChromeVisible
+          width: parent.width
+          height: root.activeFilterRowHeight
+
+          Row {
+            id: filterRow
+            anchors.left: parent.left
+            anchors.leftMargin: Style.spacing.md
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.spacing.sm
+
+            Repeater {
+              model: root.filterChips
+
+              delegate: Rectangle {
+                required property var modelData
+                readonly property bool active: root.mode === modelData.mode
+                readonly property string chipText:
+                  modelData.mode === "type" && root.activeTypeKind
+                    ? modelData.label + ": " + root.activeTypeKind
+                    : modelData.label
+
+                height: Style.space(26)
+                width: chipLabel.implicitWidth + Style.spacing.md * 2
+                radius: height / 2
+                color: active ? Util.alpha(root.shortcutColor, 0.18)
+                  : Util.alpha(root.foreground, 0.06)
+                border.width: 1
+                border.color: active ? Util.alpha(root.shortcutColor, 0.70)
+                  : Util.alpha(root.foreground, 0.16)
+
+                Text {
+                  id: chipLabel
+                  anchors.centerIn: parent
+                  text: parent.chipText
+                  textFormat: Text.PlainText
+                  color: parent.active ? root.shortcutColor : root.foreground
+                  opacity: parent.active ? 1.0 : 0.72
+                  font.family: Style.font.menuFamily
+                  font.pixelSize: Style.font.caption
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (modelData.mode === "type") root.cycleTypeFilter()
+                    else root.applyFilter(modelData.completion)
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        Item {
           width: parent.width
           height: Math.max(root.rowHeight,
             parent.height - root.activeHeaderHeight - root.activeFooterHeight
-              - root.statusHeight
+              - root.activeFilterRowHeight - root.statusHeight
               - parent.spacing * root.chromeSpacingCount)
           clip: true
 
@@ -899,13 +1028,7 @@ Item {
           Text {
             visible: displayModel.count === 0
             anchors.fill: parent
-            text: root.mode === "install"
-              ? "No installable plugins match this query"
-              : (root.mode === "remove"
-                ? "No removable local plugins match this query"
-                : (root.mode === "command"
-                  ? "No command matches this query"
-                  : "No plugins match this query"))
+            text: root.emptyStateText
             textFormat: Text.PlainText
             color: root.foreground
             opacity: 0.62
@@ -956,19 +1079,19 @@ Item {
             anchors.topMargin: Style.space(6)
 
             Repeater {
-              model: [
-                { keyLabel: "[Ctrl+I]", label: "Info" },
-                { keyLabel: "[Ctrl+W]",
-                  label: root.marketplaceShortcutLabel },
-                { keyLabel: "[Ctrl+G]", label: "GitHub source" },
-                { keyLabel: "[Ctrl+R]", label: "Refresh" },
-                { keyLabel: "[Ctrl+S]", label: "Settings" }
-              ]
+              model: root.footerModel
 
               delegate: Item {
                 required property var modelData
-                width: footerRow.width / 5
+                required property int index
+                width: footerRow.width / root.footerModel.length
                 height: footerRow.height
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: root.activateFooter(parent.index)
+                }
 
                 Column {
                   anchors.centerIn: parent
