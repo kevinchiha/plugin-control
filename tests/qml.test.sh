@@ -13,7 +13,7 @@ if [[ -x /usr/lib/qt6/bin/qmllint ]]; then
 fi
 "$qmllint_bin" -I /usr/share/omarchy/shell \
   "$ROOT/Service.qml" "$ROOT/PluginControl.qml" "$ROOT/ActionDialog.qml" \
-  "$ROOT/PreviewPane.qml" \
+  "$ROOT/PreviewPane.qml" "$ROOT/PreviewLightbox.qml" \
   "$ROOT/PluginControlBar.qml" \
   "$ROOT/lib/shortcuts/HyprlandBinding.qml"
 printf 'ok - QML lint\n'
@@ -26,6 +26,8 @@ rg -q 'Qt.Key_P' "$ROOT/PluginControl.qml"
 rg -q 'Qt.Key_Escape' "$ROOT/PluginControl.qml"
 rg -Fq '{ keyLabel: "[Ctrl+I]", label: "Info" }' \
   "$ROOT/PluginControl.qml"
+rg -Fq '{ keyLabel: "[Ctrl+E]", label: "Enlarge" }' "$ROOT/PluginControl.qml"
+rg -q 'Qt.Key_E' "$ROOT/PluginControl.qml"
 rg -Fq '{ keyLabel: "[Ctrl+W]",' \
   "$ROOT/PluginControl.qml"
 rg -Fq '{ keyLabel: "[Ctrl+G]", label: "GitHub source" }' \

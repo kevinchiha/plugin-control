@@ -20,6 +20,7 @@ Item {
 
   property bool opened: false
   property bool surfaceVisible: false
+  property bool lightboxOpen: false
   property alias query: queryInput.text
   property string mode: "browse"
   property int selectedIndex: 0
@@ -327,13 +328,16 @@ Item {
     return applyFilter("plug-type: " + typeFilterKinds[next])
   }
 
-  readonly property var footerModel: [
-    { keyLabel: "[Ctrl+I]", label: "Info" },
-    { keyLabel: "[Ctrl+W]", label: root.marketplaceShortcutLabel },
-    { keyLabel: "[Ctrl+G]", label: "GitHub source" },
-    { keyLabel: "[Ctrl+R]", label: "Refresh" },
-    { keyLabel: "[Ctrl+S]", label: "Settings" }
-  ]
+  readonly property var footerModel: {
+    var entries = [{ keyLabel: "[Ctrl+I]", label: "Info" }]
+    if (previewPaneVisible)
+      entries.push({ keyLabel: "[Ctrl+E]", label: "Enlarge" })
+    entries.push({ keyLabel: "[Ctrl+W]", label: root.marketplaceShortcutLabel })
+    entries.push({ keyLabel: "[Ctrl+G]", label: "GitHub source" })
+    entries.push({ keyLabel: "[Ctrl+R]", label: "Refresh" })
+    entries.push({ keyLabel: "[Ctrl+S]", label: "Settings" })
+    return entries
+  }
 
   readonly property string emptyStateText: {
     if (mode === "install") return "No installable plugins match this query"
@@ -353,11 +357,14 @@ Item {
 
   function activateFooter(index) {
     if (index < 0 || index >= footerModel.length) return false
-    if (index === 0) openSelectedInfo()
-    else if (index === 1) openMarketplaceShortcut()
-    else if (index === 2) openGithubShortcut()
-    else if (index === 3) requestCatalogRefresh()
-    else openSettings()
+    var key = String(footerModel[index].keyLabel || "")
+    if (key === "[Ctrl+I]") openSelectedInfo()
+    else if (key === "[Ctrl+E]") toggleLightbox()
+    else if (key === "[Ctrl+W]") openMarketplaceShortcut()
+    else if (key === "[Ctrl+G]") openGithubShortcut()
+    else if (key === "[Ctrl+R]") requestCatalogRefresh()
+    else if (key === "[Ctrl+S]") openSettings()
+    else return false
     return true
   }
 
@@ -412,6 +419,21 @@ Item {
 
   function openSelectedInfo() {
     return openDialogFor(shortcutRecord, "browse")
+  }
+
+  function closeLightbox() {
+    lightboxOpen = false
+    queryInput.forceActiveFocus()
+  }
+
+  function toggleLightbox() {
+    if (lightboxOpen) {
+      closeLightbox()
+      return
+    }
+    var record = shortcutRecord
+    if (!record || !String(record.previewImage || "")) return
+    lightboxOpen = true
   }
 
   function confirmAction() {
@@ -579,10 +601,14 @@ Item {
 
     if (isControlShortcut(event, Qt.Key_P)) {
       dismiss()
+    } else if (event.key === Qt.Key_Escape && root.lightboxOpen) {
+      root.closeLightbox()
     } else if (event.key === Qt.Key_Escape) {
       dismiss()
     } else if (isControlShortcut(event, Qt.Key_I)) {
       openSelectedInfo()
+    } else if (isControlShortcut(event, Qt.Key_E)) {
+      root.toggleLightbox()
     } else if (isControlShortcut(event, Qt.Key_W)) {
       openMarketplaceShortcut()
     } else if (isControlShortcut(event, Qt.Key_G)) {
@@ -1070,6 +1096,7 @@ Item {
               record: root.shortcutRecord
               service: root.service
               foreground: root.foreground
+              onImageActivated: root.toggleLightbox()
             }
           }
 
@@ -1180,6 +1207,18 @@ Item {
           }
         }
       }
+    }
+
+    PreviewLightbox {
+      id: previewLightbox
+      anchors.fill: parent
+      z: 30
+      opened: root.lightboxOpen
+      record: root.shortcutRecord
+      service: root.service
+      scrim: root.scrim
+      foreground: root.foreground
+      onDismissed: root.closeLightbox()
     }
   }
 }
