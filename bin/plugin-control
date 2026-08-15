@@ -269,6 +269,142 @@ download_catalog() {
   "${request[@]}"
 }
 
+preview_cache_dir() {
+  printf '%s\n' "$CACHE_ROOT/previews"
+}
+
+preview_url_valid() {
+  local url="${1:-}"
+  [[ ${#url} -le 2048 ]] || return 1
+  [[ $url =~ ^https://[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]{1,5})?/[A-Za-z0-9._~/-]+$ ]]
+}
+
+preview_extension() {
+  local lowered="${1,,}"
+  case "$lowered" in
+    *.webp) printf '.webp\n' ;;
+    *.png) printf '.png\n' ;;
+    *.jpg | *.jpeg) printf '.jpg\n' ;;
+    *.gif) printf '.gif\n' ;;
+    *) return 1 ;;
+  esac
+}
+
+preview_origin() {
+  local rest="${1#https://}"
+  printf 'https://%s\n' "${rest%%/*}"
+}
+
+preview_host_allowed() {
+  local root="$1"
+  local url="$2"
+  local config origin
+  origin="$(preview_origin "$url")"
+  config="$(load_config "$root")" || return 1
+  jq -e --arg origin "$origin" '
+    [.channels[]
+      | select(.enabled == true)
+      | (.website_url // "")
+      | select(. != "")
+      | capture("^(?<origin>https://[^/]+)").origin]
+    | index($origin) != null' <<<"$config" >/dev/null
+}
+
+preview_is_image() {
+  local file="$1"
+  local signature
+  [[ -s $file ]] || return 1
+  signature="$(od -An -tx1 -N 12 -- "$file" | tr -d ' \n')"
+  case "$signature" in
+    89504e470d0a1a0a*) return 0 ;;
+    ffd8ff*) return 0 ;;
+    474946383761* | 474946383961*) return 0 ;;
+    52494646????????57454250*) return 0 ;;
+  esac
+  return 1
+}
+
+preview_download() {
+  local url="$1"
+  local target="$2"
+  local directory temporary
+  directory="$(dirname -- "$target")"
+  temporary="$(mktemp "$directory/.preview.tmp.XXXXXX")" || return 1
+  if ! curl --fail --silent --show-error --location \
+    --proto '=https' --proto-redir '=https' --max-redirs 3 \
+    --connect-timeout 5 --max-time 20 --max-filesize 4194304 \
+    --header 'User-Agent: plugin-control/0.1.0' \
+    --output "$temporary" -- "$url"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  if ! preview_is_image "$temporary"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  chmod 0600 "$temporary"
+  mv -fT -- "$temporary" "$target" || {
+    rm -f -- "$temporary"
+    return 1
+  }
+}
+
+readonly PREVIEW_CACHE_LIMIT=400
+
+preview_evict() {
+  local directory count excess
+  directory="$(preview_cache_dir)"
+  [[ -d $directory ]] || return 0
+  count="$(find "$directory" -maxdepth 1 -type f -printf '.' | wc -c)"
+  (( count > PREVIEW_CACHE_LIMIT )) || return 0
+  excess=$(( count - PREVIEW_CACHE_LIMIT ))
+  find "$directory" -maxdepth 1 -type f -printf '%T@ %p\0' \
+    | sort -z -n \
+    | head -z -n "$excess" \
+    | while IFS=' ' read -r -d '' _ path; do
+      rm -f -- "$path"
+    done || true
+}
+
+preview_command() {
+  local root="$1"
+  local url="${2:-}"
+  local extension digest target directory
+  preview_url_valid "$url" || {
+    json_error "unsupported preview address"
+    return
+  }
+  extension="$(preview_extension "$url")" || {
+    json_error "unsupported preview image type"
+    return
+  }
+  preview_host_allowed "$root" "$url" || {
+    json_error "preview host is not an enabled channel"
+    return
+  }
+  digest="$(printf '%s' "$url" | sha256sum | cut -d ' ' -f 1)"
+  directory="$(preview_cache_dir)"
+  target="$directory/$digest$extension"
+  mkdir -p -- "$directory"
+  {
+    flock -w 10 11 || {
+      json_error "another preview download is in progress"
+      return
+    }
+    if [[ -f $target && ! -L $target && -s $target ]]; then
+      touch -- "$target"
+      jq -cn --arg path "$target" '{ok:true,path:$path,cached:true}'
+      return
+    fi
+    preview_download "$url" "$target" || {
+      json_error "could not download the preview"
+      return
+    }
+    preview_evict
+    jq -cn --arg path "$target" '{ok:true,path:$path,cached:false}'
+  } 11>"$RUNTIME_ROOT/preview-$digest.lock"
+}
+
 refresh_catalog_channel() {
   local root="$1"
   local channel="$2"
@@ -1304,7 +1440,7 @@ stop_command() {
 }
 
 usage() {
-  json_error "usage: plugin-control <cached|refresh|ensure-config|config-status|status|action|ack|benchmark> ..."
+  json_error "usage: plugin-control <cached|refresh|ensure-config|config-status|status|action|ack|preview|benchmark> ..."
 }
 
 main() {
@@ -1376,6 +1512,10 @@ main() {
     config-status)
       (( $# == 1 )) || { usage; return 2; }
       config_status "$(source_root "$1")"
+      ;;
+    preview)
+      (( $# == 2 )) || { usage; return 2; }
+      preview_command "$(source_root "$1")" "$2"
       ;;
     status)
       (( $# == 0 )) || { usage; return 2; }
