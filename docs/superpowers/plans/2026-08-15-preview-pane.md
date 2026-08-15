@@ -1412,7 +1412,7 @@ parent changes:
               width: root.previewPaneWidth
               height: parent.height
               visible: root.previewPaneVisible
-              record: root.selectedRecord
+              record: root.shortcutRecord
               service: root.service
               foreground: root.foreground
             }
@@ -1569,7 +1569,7 @@ and beside the other functions:
       closeLightbox()
       return
     }
-    var record = selectedRecord
+    var record = shortcutRecord
     if (!record || !String(record.previewImage || "")) return
     lightboxOpen = true
   }
@@ -1585,7 +1585,7 @@ Inside `PanelWindow`, after the `BorderSurface { id: card ... }` block:
       anchors.fill: parent
       z: 30
       opened: root.lightboxOpen
-      record: root.selectedRecord
+      record: root.shortcutRecord
       service: root.service
       scrim: root.scrim
       foreground: root.foreground
