@@ -19,6 +19,9 @@ Item {
     message: "No action has run."
   })
   property bool ready: false
+  // False until a counts file has been cached, which is what lets the palette
+  // decide whether the view, copy and heart sorts can be honoured.
+  property bool engagementAvailable: false
   property bool refreshing: false
   property bool actionStarting: false
   property bool animationsEnabled: true
@@ -121,6 +124,7 @@ Item {
     }
 
     snapshot = parsed
+    engagementAvailable = parsed.engagementAvailable === true
     applyRecords(parsed.records)
     lastRefreshError = parsed.cache
       ? String(parsed.cache.lastRefreshError || "") : ""

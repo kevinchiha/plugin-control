@@ -29,14 +29,16 @@ ShellRoot {
       name: "No Screenshot Plugin"
     }
 
-    if (overlay.footerModel.length !== 6
+    if (overlay.footerModel.length !== 7
         || overlay.footerModel[0].keyLabel !== "[Ctrl+I]"
         || overlay.footerModel[1].keyLabel !== "[Ctrl+E]"
         || overlay.footerModel[1].label !== "Enlarge"
         || overlay.footerModel[2].keyLabel !== "[Ctrl+W]"
         || overlay.footerModel[3].keyLabel !== "[Ctrl+G]"
-        || overlay.footerModel[4].keyLabel !== "[Ctrl+R]"
-        || overlay.footerModel[5].keyLabel !== "[Ctrl+S]") {
+        || overlay.footerModel[4].keyLabel !== "[Ctrl+O]"
+        || overlay.footerModel[4].label !== "Sort"
+        || overlay.footerModel[5].keyLabel !== "[Ctrl+R]"
+        || overlay.footerModel[6].keyLabel !== "[Ctrl+S]") {
       console.error("PLUGIN_CONTROL_LOAD_ERROR footer model pane visible")
     }
 
@@ -346,19 +348,21 @@ ShellRoot {
         overlay.filteredRecords = [footerInfoRecord]
         overlay.selectedIndex = 0
         overlay.selectedRecord = null
-        if (overlay.footerModel.length !== 5
+        if (overlay.footerModel.length !== 6
             || overlay.footerModel[0].keyLabel !== "[Ctrl+I]"
             || overlay.footerModel[0].label !== "Info"
             || overlay.footerModel[1].keyLabel !== "[Ctrl+W]"
             || overlay.footerModel[2].keyLabel !== "[Ctrl+G]"
             || overlay.footerModel[2].label !== "GitHub source"
-            || overlay.footerModel[3].keyLabel !== "[Ctrl+R]"
-            || overlay.footerModel[3].label !== "Refresh"
-            || overlay.footerModel[4].keyLabel !== "[Ctrl+S]"
-            || overlay.footerModel[4].label !== "Settings") {
+            || overlay.footerModel[3].keyLabel !== "[Ctrl+O]"
+            || overlay.footerModel[3].label !== "Sort"
+            || overlay.footerModel[4].keyLabel !== "[Ctrl+R]"
+            || overlay.footerModel[4].label !== "Refresh"
+            || overlay.footerModel[5].keyLabel !== "[Ctrl+S]"
+            || overlay.footerModel[5].label !== "Settings") {
           console.error("PLUGIN_CONTROL_LOAD_ERROR footer model pane hidden")
         }
-        if (overlay.activateFooter(-1) || overlay.activateFooter(5))
+        if (overlay.activateFooter(-1) || overlay.activateFooter(6))
           console.error("PLUGIN_CONTROL_LOAD_ERROR footer bounds")
         if (!overlay.activateFooter(0) || !overlay.selectedRecord
             || overlay.selectedRecord.id !== "io.example.footer-info"
@@ -371,11 +375,11 @@ ShellRoot {
         var footerService = overlay.service
         overlay.service = null
         overlay.transientMessage = "stale refresh message"
-        if (!overlay.activateFooter(3) || overlay.transientMessage !== "") {
+        if (!overlay.activateFooter(4) || overlay.transientMessage !== "") {
           console.error("PLUGIN_CONTROL_LOAD_ERROR footer refresh dispatch")
         }
         overlay.service = footerService
-        if (!overlay.activateFooter(4) || overlay.settingsMenuOpen !== true)
+        if (!overlay.activateFooter(5) || overlay.settingsMenuOpen !== true)
           console.error("PLUGIN_CONTROL_LOAD_ERROR footer settings action")
         overlay.settingsMenuOpen = false
 

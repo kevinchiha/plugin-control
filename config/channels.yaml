@@ -17,6 +17,10 @@ channels:
     enabled: true
     catalog_url: https://omarchyplugins.com/catalog.json
     website_url: https://omarchyplugins.com/
+    # Views, copies and hearts are counted separately from the catalog.
+    # Remove this line to stop Plugin Control contacting the counter service;
+    # stars keep working either way.
+    engagement_url: https://api.omarchyplugins.com/v1/stats
 
   - id: hancore-submissions
     name: Unlisted marketplace submissions

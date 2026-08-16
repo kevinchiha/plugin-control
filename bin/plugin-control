@@ -505,6 +505,47 @@ refresh_catalog_channel() {
   rm -rf -- "$stage"
 }
 
+# Stars arrive with the catalog, but views, copies and hearts live on the
+# marketplace's counter service. They are cached beside the catalog so the
+# palette keeps showing the last known numbers when that service is down.
+refresh_engagement_channel() {
+  local root="$1"
+  local channel="$2"
+  local channel_id url
+  channel_id="$(jq -r '.id' <<<"$channel")"
+  url="$(jq -r '.engagement_url // ""' <<<"$channel")"
+  valid_channel_id "$channel_id" || return 1
+  # A channel that names no counter service is a channel without counts, not a
+  # failed refresh.
+  [[ -n $url ]] || return 0
+
+  local cache stage body headers status normalized
+  cache="$CHANNEL_CACHE/$channel_id.engagement.json"
+  stage="$(mktemp -d "$RUNTIME_ROOT/engagement-$channel_id.XXXXXX")"
+  body="$stage/counts.json"
+  headers="$stage/headers"
+
+  status="$(download_catalog "$url" "$body" "$headers" "" "")" || status="000"
+  if [[ $status != 200 ]]; then
+    rm -rf -- "$stage"
+    return 1
+  fi
+  normalized="$(jq -c -f "$root/lib/engagement.jq" "$body" 2>/dev/null)" || {
+    rm -rf -- "$stage"
+    return 1
+  }
+  if ! jq -e '.ok == true and (.counts | type == "object")' \
+    <<<"$normalized" >/dev/null; then
+    rm -rf -- "$stage"
+    return 1
+  fi
+  atomic_write_text "$cache" "$normalized" || {
+    rm -rf -- "$stage"
+    return 1
+  }
+  rm -rf -- "$stage"
+}
+
 github_get() {
   local url="$1"
   local output="$2"
@@ -699,7 +740,12 @@ refresh_channel() {
   local channel="$2"
   local config="$3"
   case "$(jq -r '.type' <<<"$channel")" in
-    marketplace-catalog) refresh_catalog_channel "$root" "$channel" ;;
+    marketplace-catalog)
+      refresh_catalog_channel "$root" "$channel" || return 1
+      # Counts are a bonus on top of the catalog: losing them must not report
+      # the channel itself as failed.
+      refresh_engagement_channel "$root" "$channel" || true
+      ;;
     github-submissions) refresh_submission_channel "$root" "$channel" "$config" ;;
     *) return 1 ;;
   esac
@@ -856,9 +902,32 @@ build_snapshot() (
   config_file="$stage/config.json"
   refresh_file="$stage/refresh.json"
   snapshot_file="$stage/snapshot.json"
-  jq -sc '
-    group_by(.id)
+
+  # Counts are folded in here rather than at download time so that a counter
+  # service outage costs the palette its three count sorts, never its catalog.
+  local counts_file engagement_cache engagement_available=false
+  counts_file="$stage/counts.json"
+  printf '{}\n' >"$counts_file"
+  while IFS= read -r channel; do
+    channel_id="$(jq -r '.id' <<<"$channel")"
+    engagement_cache="$CHANNEL_CACHE/$channel_id.engagement.json"
+    [[ -f $engagement_cache && ! -L $engagement_cache ]] || continue
+    jq -e '.ok == true and (.counts | type == "object")' \
+      "$engagement_cache" >/dev/null 2>&1 || continue
+    if jq -s '.[0] * .[1].counts' "$counts_file" "$engagement_cache" \
+      >"$counts_file.next" 2>/dev/null; then
+      mv -- "$counts_file.next" "$counts_file"
+      engagement_available=true
+    fi
+  done < <(jq -c '.channels[] | select(.enabled == true)' <<<"$config")
+
+  jq -sc --slurpfile counts "$counts_file" '
+    ($counts[0] // {}) as $counts
+    | group_by(.id)
     | map(sort_by(.sourceRank // 0) | reduce .[] as $record ({}; . * $record))
+    | map(. + {views: ($counts[.id].views // 0),
+      copies: ($counts[.id].copies // 0),
+      hearts: ($counts[.id].hearts // 0)})
     | sort_by((.name // .id | ascii_downcase), .id)
   ' "$records_jsonl" >"$merged_file"
   jq -sc '
@@ -881,10 +950,12 @@ build_snapshot() (
   fi
   jq -cn \
     --arg snapshotId "$snapshot_id" --arg generatedAt "$(utc_now)" \
+    --argjson engagementAvailable "$engagement_available" \
     --slurpfile records "$merged_file" \
     --slurpfile diagnostics "$diagnostics_file" \
     --slurpfile config "$config_file" --slurpfile refresh "$refresh_file" \
     '{ok:true,snapshotId:$snapshotId,generatedAt:$generatedAt,
+      engagementAvailable:$engagementAvailable,
       records:$records[0],diagnostics:$diagnostics[0],config:$config[0],
       cache:{lastSuccessfulRefresh:($refresh[0].lastSuccessfulRefresh // ""),
         lastRefreshError:($refresh[0].lastRefreshError // ""),

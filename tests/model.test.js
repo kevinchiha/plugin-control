@@ -445,3 +445,115 @@ test("preview URLs are not searchable text", () => {
   ]);
   assert.equal(prepared[0].searchFields.join(" ").indexOf("zzzunique"), -1);
 });
+
+test("missing engagement counts default to zero", () => {
+  const prepared = Catalog.prepareRecords([
+    { id: "io.example.quiet", name: "Quiet", source: "marketplace" }
+  ]);
+  assert.equal(prepared[0].hearts, 0);
+  assert.equal(prepared[0].views, 0);
+  assert.equal(prepared[0].copies, 0);
+});
+
+test("catalog dates become sortable numbers", () => {
+  const prepared = Catalog.prepareRecords([
+    {
+      id: "io.example.dated",
+      name: "Dated",
+      source: "marketplace",
+      listedAt: "2026-07-28T00:00:00.000Z",
+      repositoryUpdatedAt: "2026-08-11T17:06:54Z"
+    }
+  ]);
+  assert.equal(prepared[0].listedTime, Date.parse("2026-07-28T00:00:00.000Z"));
+  assert.equal(prepared[0].updatedTime, Date.parse("2026-08-11T17:06:54Z"));
+});
+
+const sortRecords = Catalog.prepareRecords([
+  {
+    id: "io.example.alpha", name: "Alpha", source: "marketplace",
+    stars: 5, hearts: 1, views: 100, copies: 2,
+    listedAt: "2026-01-01T00:00:00Z", repositoryUpdatedAt: "2026-08-01T00:00:00Z"
+  },
+  {
+    id: "io.example.bravo", name: "Bravo", source: "marketplace",
+    stars: 90, hearts: 0, views: 3, copies: 40,
+    listedAt: "2026-06-01T00:00:00Z", repositoryUpdatedAt: "2026-02-01T00:00:00Z"
+  },
+  {
+    id: "io.example.charlie", name: "Charlie", source: "marketplace",
+    stars: 20, hearts: 9, views: 50, copies: 1,
+    listedAt: "2026-03-01T00:00:00Z", repositoryUpdatedAt: "2026-05-01T00:00:00Z"
+  }
+]);
+
+function sortedNames(sort, input) {
+  return Fuzzy.search(sortRecords, input === undefined ? "" : input, 10, sort)
+    .results.map((record) => record.name);
+}
+
+test("most starred sort puts the highest star count first", () => {
+  assert.deepEqual(sortedNames("stars"), ["Bravo", "Charlie", "Alpha"]);
+});
+
+test("most hearts sort puts the most loved first", () => {
+  assert.deepEqual(sortedNames("hearts"), ["Charlie", "Alpha", "Bravo"]);
+});
+
+test("most viewed sort puts the most visited first", () => {
+  assert.deepEqual(sortedNames("views"), ["Alpha", "Charlie", "Bravo"]);
+});
+
+test("most copied sort puts the most copied first", () => {
+  assert.deepEqual(sortedNames("copies"), ["Bravo", "Alpha", "Charlie"]);
+});
+
+test("recently added sort puts the newest listing first", () => {
+  assert.deepEqual(sortedNames("added"), ["Bravo", "Charlie", "Alpha"]);
+});
+
+test("recent activity sort puts the newest repository change first", () => {
+  assert.deepEqual(sortedNames("updated"), ["Alpha", "Charlie", "Bravo"]);
+});
+
+test("A-Z sort ignores every count", () => {
+  assert.deepEqual(sortedNames("name"), ["Alpha", "Bravo", "Charlie"]);
+});
+
+test("a sort still applies to a narrowed search", () => {
+  assert.deepEqual(sortedNames("stars", "example"), ["Bravo", "Charlie", "Alpha"]);
+});
+
+test("an unknown sort falls back to best match", () => {
+  assert.deepEqual(sortedNames("nonsense"), ["Alpha", "Bravo", "Charlie"]);
+});
+
+test("the sort cycle starts at best match and ends at A-Z", () => {
+  assert.deepEqual(Fuzzy.SORT_OPTIONS.map((option) => option.key),
+    ["", "added", "updated", "stars", "views", "copies", "hearts", "name"]);
+});
+
+test("every sort has a label for the chip", () => {
+  assert.equal(Fuzzy.sortLabel(""), "Best match");
+  assert.equal(Fuzzy.sortLabel("stars"), "Most starred");
+  assert.equal(Fuzzy.sortLabel("name"), "A-Z");
+});
+
+test("the sort chip advances one step", () => {
+  assert.equal(Fuzzy.nextSort("", true), "added");
+  assert.equal(Fuzzy.nextSort("stars", true), "views");
+});
+
+test("the last sort wraps back to best match", () => {
+  assert.equal(Fuzzy.nextSort("name", true), "");
+});
+
+test("the chip skips counts the marketplace could not supply", () => {
+  assert.equal(Fuzzy.nextSort("stars", false), "name");
+});
+
+test("a chosen count sort falls back when the counts go missing", () => {
+  assert.equal(Fuzzy.effectiveSort("hearts", false), "");
+  assert.equal(Fuzzy.effectiveSort("hearts", true), "hearts");
+  assert.equal(Fuzzy.effectiveSort("stars", false), "stars");
+});

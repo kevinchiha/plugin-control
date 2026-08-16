@@ -12,8 +12,8 @@ module PluginControl
   ].freeze
   SETTINGS_KEYS = %w[tray-icon-hidden preview-pane-hidden].freeze
   CHANNEL_KEYS = %w[
-    id name type enabled catalog_url website_url repository required_labels
-    excluded_labels
+    id name type enabled catalog_url website_url engagement_url repository
+    required_labels excluded_labels
   ].freeze
   CHANNEL_TYPES = %w[marketplace-catalog github-submissions].freeze
 
@@ -80,6 +80,10 @@ module PluginControl
       if channel.key?("website_url")
         out["website_url"] = https_url(channel["website_url"],
           "channels[#{index}].website_url")
+      end
+      if channel.key?("engagement_url")
+        out["engagement_url"] = https_url(channel["engagement_url"],
+          "channels[#{index}].engagement_url")
       end
     else
       repository = required_string(channel["repository"], "channels[#{index}].repository", 160)

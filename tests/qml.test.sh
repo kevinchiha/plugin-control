@@ -174,3 +174,12 @@ if grep -Fq 'PLUGIN_CONTROL_LOAD_ERROR' "$runtime_root/quickshell.log"; then
   exit 1
 fi
 printf 'ok - service overlay and bar widget instantiate in Quickshell\n'
+
+rg -Fq '{ keyLabel: "[Ctrl+O]", label: "Sort" }' "$ROOT/PluginControl.qml"
+rg -q 'isControlShortcut\(event, Qt.Key_O\)' "$ROOT/PluginControl.qml"
+rg -Fq 'Fuzzy.nextSort(' "$ROOT/PluginControl.qml"
+rg -Fq 'Fuzzy.sortLabel(' "$ROOT/PluginControl.qml"
+rg -Fq 'Fuzzy.effectiveSort(' "$ROOT/PluginControl.qml"
+rg -q 'engagementAvailable' "$ROOT/Service.qml" "$ROOT/PluginControl.qml"
+rg -q 'countsLine|starHeartLine' "$ROOT/PluginControl.qml"
+printf 'ok - sort chip counts and shortcut are wired\n'

@@ -24,6 +24,13 @@ function countNumber(value) {
   return isFinite(number) && number > 0 ? Math.floor(number) : 0
 }
 
+// Sorting by date has to survive a catalog that spells a date wrong or omits
+// it, so an unreadable stamp sorts as the oldest possible rather than as NaN.
+function timeNumber(value) {
+  var parsed = Date.parse(cleanText(value))
+  return isFinite(parsed) ? parsed : 0
+}
+
 function copy(value) {
   var out = {}
   if (!isRecord(value)) return out
@@ -95,7 +102,13 @@ function normalizeRecord(value) {
   record.kind = cleanText(record.kind)
   record.license = cleanText(record.license)
   record.repositoryUpdatedAt = cleanText(record.repositoryUpdatedAt)
+  record.listedAt = cleanText(record.listedAt)
+  record.listedTime = timeNumber(record.listedAt)
+  record.updatedTime = timeNumber(record.repositoryUpdatedAt)
   record.stars = countNumber(record.stars)
+  record.hearts = countNumber(record.hearts)
+  record.views = countNumber(record.views)
+  record.copies = countNumber(record.copies)
   record.previewThumbnail = httpsUrl(record.previewThumbnail)
   record.previewImage = httpsUrl(record.previewImage)
   record.previewThumbnailWidth = countNumber(record.previewThumbnailWidth)

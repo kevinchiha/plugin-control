@@ -125,6 +125,89 @@ function compareRows(left, right) {
   return leftId < rightId ? -1 : (leftId > rightId ? 1 : 0)
 }
 
+// A sort is deliberately not one of the plug- commands: those replace each
+// other, while an order has to combine with whichever filter and query are
+// already active. "Mine, most starred" is a reasonable thing to ask for.
+function compareNames(left, right) {
+  var leftName = left.searchFields[0]
+  var rightName = right.searchFields[0]
+  if (leftName < rightName) return -1
+  if (leftName > rightName) return 1
+  return 0
+}
+
+function countField(record, field) {
+  var value = Number(record && record[field])
+  return isFinite(value) ? value : 0
+}
+
+function highestFirst(field) {
+  return function (left, right) {
+    var difference = countField(right, field) - countField(left, field)
+    return difference !== 0 ? difference : compareNames(left, right)
+  }
+}
+
+var SORTERS = {
+  added: highestFirst("listedTime"),
+  updated: highestFirst("updatedTime"),
+  stars: highestFirst("stars"),
+  views: highestFirst("views"),
+  copies: highestFirst("copies"),
+  hearts: highestFirst("hearts"),
+  name: compareNames
+}
+
+function sorterFor(sort) {
+  return SORTERS[normalize(sort)] || null
+}
+
+// Stars ship with the catalog, but views, copies and hearts come from the
+// marketplace's separate counter service. When that service cannot be reached
+// those three orders would silently rank everything as zero, so the chip steps
+// over them instead of offering an order it cannot honour.
+var ENGAGEMENT_SORTS = { views: true, copies: true, hearts: true }
+
+var SORT_OPTIONS = [
+  { key: "", label: "Best match" },
+  { key: "added", label: "Recently added" },
+  { key: "updated", label: "Recent activity" },
+  { key: "stars", label: "Most starred" },
+  { key: "views", label: "Most viewed" },
+  { key: "copies", label: "Most copied" },
+  { key: "hearts", label: "Most hearts" },
+  { key: "name", label: "A-Z" }
+]
+
+function sortIndex(sort) {
+  var key = normalize(sort)
+  for (var i = 0; i < SORT_OPTIONS.length; i++)
+    if (SORT_OPTIONS[i].key === key) return i
+  return 0
+}
+
+function sortLabel(sort) {
+  return SORT_OPTIONS[sortIndex(sort)].label
+}
+
+function sortOffered(sort, engagementAvailable) {
+  return engagementAvailable !== false || !ENGAGEMENT_SORTS[normalize(sort)]
+}
+
+function nextSort(sort, engagementAvailable) {
+  var index = sortIndex(sort)
+  for (var step = 1; step <= SORT_OPTIONS.length; step++) {
+    var candidate = SORT_OPTIONS[(index + step) % SORT_OPTIONS.length]
+    if (sortOffered(candidate.key, engagementAvailable)) return candidate.key
+  }
+  return ""
+}
+
+function effectiveSort(sort, engagementAvailable) {
+  var key = normalize(sort)
+  return sortOffered(key, engagementAvailable) ? key : ""
+}
+
 // fieldScore separates match quality into fixed 20000-wide bands (exact,
 // prefix, token boundary, contiguous, subsequence) and varies the remainder by
 // haystack length. Commands all share the "plug-" prefix, so that remainder
@@ -199,7 +282,7 @@ function matchesKind(record, query) {
   return normalizeKind(record.kind).indexOf(needle) >= 0
 }
 
-function search(records, input, limit) {
+function search(records, input, limit, sort) {
   var parsed = parseQuery(input)
   var values = Array.isArray(records) ? records : []
   var maximum = Number(limit)
@@ -226,7 +309,14 @@ function search(records, input, limit) {
     rows.push({ record: record, score: score })
   }
 
-  rows.sort(compareRows)
+  var sorter = sorterFor(sort)
+  if (sorter) {
+    rows.sort(function (left, right) {
+      return sorter(left.record, right.record)
+    })
+  } else {
+    rows.sort(compareRows)
+  }
   var results = []
   var rawQuery = normalize(input)
   if (parsed.mode === "browse") {
@@ -244,6 +334,10 @@ if (typeof module !== "undefined") {
   module.exports = {
     parseQuery: parseQuery,
     scoreRecord: scoreRecord,
-    search: search
+    search: search,
+    SORT_OPTIONS: SORT_OPTIONS,
+    sortLabel: sortLabel,
+    nextSort: nextSort,
+    effectiveSort: effectiveSort
   }
 }

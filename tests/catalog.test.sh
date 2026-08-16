@@ -219,3 +219,84 @@ refresh_catalog_channel "$ROOT" "$channel"
 jq -e '.records[0].previewThumbnail == ""' \
   "$CHANNEL_CACHE/marketplace.json" >/dev/null
 printf 'ok - a channel without a website produces no previews\n'
+
+jq '.plugins[0].listedAt="2026-07-28T00:00:00.000Z"' \
+  "$TEST_DIR/fixtures/catalog-valid.json" >"$TEMP_ROOT/listed.json"
+listed="$(normalize "$TEMP_ROOT/listed.json")"
+jq -e '.records[0].listedAt == "2026-07-28T00:00:00.000Z"' <<<"$listed" >/dev/null
+jq -e '.records[1].listedAt == ""' <<<"$listed" >/dev/null
+printf 'ok - listing dates carry through for the recently added sort\n'
+
+channel_with_counts="$(jq -c \
+  '. + {engagement_url:"https://api.omarchyplugins.com/v1/stats"}' <<<"$channel")"
+counts_cache="$CHANNEL_CACHE/marketplace.engagement.json"
+
+download_catalog() {
+  printf '{"schemaVersion":1,"plugins":{"io.example.weather":
+    {"views":61,"copies":28,"hearts":7}}}\n' >"$2"
+  : >"$3"
+  printf '200\n'
+}
+refresh_engagement_channel "$ROOT" "$channel_with_counts"
+jq -e '.ok == true and .counts["io.example.weather"].hearts == 7
+  and .counts["io.example.weather"].views == 61
+  and .counts["io.example.weather"].copies == 28' "$counts_cache" >/dev/null
+printf 'ok - marketplace counts are downloaded and cached\n'
+
+counts_before="$(sha256sum "$counts_cache")"
+download_catalog() {
+  printf 'not json\n' >"$2"
+  : >"$3"
+  printf '200\n'
+}
+if refresh_engagement_channel "$ROOT" "$channel_with_counts"; then
+  printf 'not ok - malformed counts payload was accepted\n' >&2
+  exit 1
+fi
+[[ $(sha256sum "$counts_cache") == "$counts_before" ]]
+printf 'ok - malformed counts preserve the last cached counts\n'
+
+download_catalog() {
+  printf '{"schemaVersion":1,"plugins":{"../../etc/passwd":{"views":1},
+    "io.example.power":{"views":"many","copies":-4,"hearts":2}}}\n' >"$2"
+  : >"$3"
+  printf '200\n'
+}
+refresh_engagement_channel "$ROOT" "$channel_with_counts"
+jq -e '(.counts | has("../../etc/passwd")) == false
+  and .counts["io.example.power"] == {views:0,copies:0,hearts:2}' \
+  "$counts_cache" >/dev/null
+printf 'ok - unsafe IDs and bad numbers are dropped from counts\n'
+
+download_catalog() {
+  printf 'unused\n' >"$2"
+  : >"$3"
+  printf '500\n'
+}
+refresh_engagement_channel "$ROOT" "$channel"
+printf 'ok - a channel with no counts service is not a failure\n'
+
+rm -f -- "$counts_cache"
+download_catalog() {
+  case "$1" in
+    *stats*)
+      printf '{"schemaVersion":1,"plugins":{"io.example.weather":
+        {"hearts":3}}}\n' >"$2" ;;
+    *) printf '{"stateSchemaVersion":1,"plugins":[]}\n' >"$2" ;;
+  esac
+  : >"$3"
+  printf '200\n'
+}
+refresh_channel "$ROOT" "$channel_with_counts" "$(load_config "$ROOT")"
+jq -e '.counts["io.example.weather"].hearts == 3' "$counts_cache" >/dev/null
+printf 'ok - refreshing a channel also refreshes its counts\n'
+
+download_catalog() {
+  case "$1" in
+    *stats*) printf 'gone\n' >"$2"; : >"$3"; printf '500\n' ;;
+    *) printf '{"stateSchemaVersion":1,"plugins":[]}\n' >"$2"; : >"$3"
+       printf '200\n' ;;
+  esac
+}
+refresh_channel "$ROOT" "$channel_with_counts" "$(load_config "$ROOT")"
+printf 'ok - a counts outage does not fail the catalog refresh\n'

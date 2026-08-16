@@ -159,3 +159,27 @@ test("preview pane setting is optional") do
   config = parse(default_text.sub("\n  preview-pane-hidden: false", ""))
   assert_equal false, config.dig("settings", "preview-pane-hidden")
 end
+
+test("the marketplace channel names a counts service") do
+  config = PluginControl.load_file(DEFAULT)
+  assert_equal "https://api.omarchyplugins.com/v1/stats",
+    config.dig("channels", 0, "engagement_url")
+end
+
+test("a counts service must use HTTPS") do
+  assert_invalid(
+    default_text.sub("    engagement_url: https://api.omarchyplugins.com/v1/stats",
+      "    engagement_url: http://api.omarchyplugins.com/v1/stats"),
+    "must use HTTPS")
+end
+
+test("a channel without a counts service leaves it unset") do
+  config = PluginControl.load_file(DEFAULT)
+  assert_equal false, config.dig("channels", 1).key?("engagement_url")
+end
+
+test("the counts service can be removed from the configuration") do
+  config = parse(default_text.sub(
+    "\n    engagement_url: https://api.omarchyplugins.com/v1/stats", ""))
+  assert_equal false, config.dig("channels", 0).key?("engagement_url")
+end

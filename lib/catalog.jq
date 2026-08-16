@@ -122,6 +122,7 @@ def normalized_record($channel_name; $channel_source; $channel_rank):
       license: (.license // ""),
       stars: bounded_number("stars"; 1000000),
       repositoryUpdatedAt: (.repositoryUpdatedAt // ""),
+      listedAt: (.listedAt // ""),
       previewThumbnail: preview_url("previewThumbnail"),
       previewImage: preview_url("previewImage"),
       previewThumbnailWidth: bounded_number("previewThumbnailWidth"; 10000),

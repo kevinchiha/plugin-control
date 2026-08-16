@@ -56,6 +56,36 @@ they are the same thing, since a chip writes its command into the field:
 `plug-type:` takes a value, so its chip steps through the kinds and clears on
 the step past the last. Either spelling works: `bar widget` or `bar-widget`.
 
+### Counts and sorting
+
+Marketplace rows show their star and heart counts on the right: `★ 274  ♥ 7`.
+Built-in plugins and your own checkouts are not marketplace listings, so they
+show no counts rather than a row of zeroes.
+
+The `Sort` chip sets the order, and `Ctrl+O` steps it forward. Unlike the
+filters above, the order is not a command written into the search field: it is
+its own setting, so it survives switching filters and typing a query. "Mine,
+most starred" is a reasonable thing to ask for.
+
+| Order             | Ranks by                                          |
+| ----------------- | ------------------------------------------------- |
+| `Best match`      | Search relevance — the default, and how it behaved before |
+| `Recently added`  | When the marketplace listed the plugin            |
+| `Recent activity` | When its repository last changed                  |
+| `Most starred`    | GitHub stars                                      |
+| `Most viewed`     | Marketplace page views                            |
+| `Most copied`     | Marketplace install-command copies                |
+| `Most hearts`     | Marketplace hearts                                |
+| `A–Z`             | Name                                              |
+
+Stars arrive with the catalog. Views, copies and hearts come from the
+marketplace's separate counter service, named by `engagement_url` in the channel
+configuration; they are cached alongside the catalog, so the last known numbers
+survive an outage. When that service has never been reached, the chip steps over
+those three orders instead of offering a ranking it cannot honour. Delete the
+`engagement_url` line to stop contacting it — stars and every other order keep
+working.
+
 Commands are not pinned. Type `install`, `remove`, `plug-in`, or `plg-in` to
 bring one forward, then press Tab or Enter to complete it. Search restarts after
 the colon. Backspace edits a plugin name normally; at an empty completed prefix,
@@ -72,6 +102,7 @@ Useful keys:
 | `Tab`                                      | Complete the selected command               |
 | `Ctrl+Backspace`                           | Remove the previous word                    |
 | `Ctrl+U`                                   | Clear the query                             |
+| `Ctrl+O`                                   | Step the sort order forward                 |
 | `Ctrl+R`                                   | Refresh the catalog                         |
 | `Ctrl+I`                                   | Show details for the selected plugin        |
 | `Ctrl+E`                                   | Enlarge the screenshot of the selection     |
@@ -146,6 +177,19 @@ live bar; a CLI flag overrides it until the YAML is saved again.
 
 Settings use strict schema 2. Invalid edits keep the last valid schema-2 file;
 version 1 is not migrated.
+
+An existing `channels.yaml` is never rewritten, only created when absent. A
+configuration written before the counter service existed therefore has no
+`engagement_url`, and the view, copy and heart orders stay unavailable until the
+line is added by hand:
+
+```yaml
+channels:
+  - id: marketplace
+    catalog_url: https://omarchyplugins.com/catalog.json
+    website_url: https://omarchyplugins.com/
+    engagement_url: https://api.omarchyplugins.com/v1/stats
+```
 
 ## Dependencies
 

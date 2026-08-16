@@ -30,4 +30,18 @@ TestCase {
       .results[0].commandCompletion, "plug-remove: ")
     compare(Fuzzy.search(records, "weather:", 50).results.length, 0)
   }
+
+  function test_qml_sorting() {
+    var records = Catalog.prepareRecords([
+      { id: "x.one", name: "One", source: "marketplace", stars: 3, hearts: 1,
+        listedAt: "2026-01-01T00:00:00Z" },
+      { id: "x.two", name: "Two", source: "marketplace", stars: 9, hearts: 0,
+        listedAt: "2026-05-01T00:00:00Z" }
+    ])
+    compare(Fuzzy.search(records, "", 50, "stars").results[0].id, "x.two")
+    compare(Fuzzy.search(records, "", 50, "hearts").results[0].id, "x.one")
+    compare(Fuzzy.search(records, "", 50, "added").results[0].id, "x.two")
+    compare(Fuzzy.sortLabel(Fuzzy.nextSort("", true)), "Recently added")
+    compare(Fuzzy.nextSort("stars", false), "name")
+  }
 }

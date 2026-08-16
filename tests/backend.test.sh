@@ -547,3 +547,30 @@ jq -e '.ok == false and (.message | contains("cannot be switched off"))' \
 wait_worker_release
 rm -rf -- "$toggle_plugin"
 printf 'ok - plugins the shell cannot toggle are refused\n'
+
+cp "$TEST_DIR/fixtures/catalog-action.json" "$cache_dir/marketplace.json"
+printf '%s\n' '{"ok":true,"counts":{"io.example.weather":
+  {"views":61,"copies":28,"hearts":7}}}' \
+  >"$cache_dir/marketplace.engagement.json"
+snapshot="$(rebuild_snapshot)"
+jq -e '.records[] | select(.id == "io.example.weather")
+  | .hearts == 7 and .views == 61 and .copies == 28' <<<"$snapshot" >/dev/null
+printf 'ok - counts are merged onto catalog records\n'
+
+jq -e '.engagementAvailable == true' <<<"$snapshot" >/dev/null
+printf 'ok - a cached counts file marks the count sorts usable\n'
+
+rm -f -- "$cache_dir/marketplace.engagement.json"
+snapshot="$(rebuild_snapshot)"
+jq -e '.engagementAvailable == false' <<<"$snapshot" >/dev/null
+jq -e '.records[] | select(.id == "io.example.weather") | .hearts == 0' \
+  <<<"$snapshot" >/dev/null
+printf 'ok - missing counts leave the count sorts unavailable\n'
+
+printf '%s\n' '{"ok":true,"counts":"broken"}' \
+  >"$cache_dir/marketplace.engagement.json"
+snapshot="$(rebuild_snapshot)"
+jq -e '.engagementAvailable == false and (.records | length) >= 1' \
+  <<<"$snapshot" >/dev/null
+printf 'ok - a corrupt counts cache still yields a catalog\n'
+rm -f -- "$cache_dir/marketplace.engagement.json"

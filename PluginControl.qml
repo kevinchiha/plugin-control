@@ -226,7 +226,7 @@ Item {
           settingsAction: "cancel"
         }
       ]
-    } : Fuzzy.search(records, query, 50)
+    } : Fuzzy.search(records, query, 50, activeSort)
     mode = result.mode
     filteredRecords = result.results
     displayModel.clear()
@@ -243,7 +243,8 @@ Item {
         warning: String(record.warning || ""),
         version: String(record.version || ""),
         releaseTag: String(record.releaseTag || ""),
-        repository: String(record.repository || "")
+        repository: String(record.repository || ""),
+        countsLine: root.countsLine(record)
       })
     }
     selectedIndex = displayModel.count > 0
@@ -293,6 +294,33 @@ Item {
     return "browse"
   }
 
+  // Stars ship with the catalog; hearts come from the marketplace counter
+  // service. Built-ins and local checkouts have neither, so their rows show no
+  // counts line rather than a row of zeroes.
+  function countsLine(record) {
+    var parts = []
+    if (Number(record.stars) > 0) parts.push("★ " + Number(record.stars))
+    if (Number(record.hearts) > 0) parts.push("♥ " + Number(record.hearts))
+    return parts.join("   ")
+  }
+
+  // Unlike the filters below, an order is state of its own: it has to survive
+  // switching filters and typing a query, because "Mine, most starred" is a
+  // reasonable thing to ask for.
+  property string sortKey: ""
+  readonly property bool engagementAvailable: root.service
+    ? root.service.engagementAvailable === true : false
+  readonly property string activeSort:
+    Fuzzy.effectiveSort(sortKey, engagementAvailable)
+  readonly property string sortChipLabel: "Sort: " + Fuzzy.sortLabel(activeSort)
+
+  function cycleSort() {
+    sortKey = Fuzzy.nextSort(activeSort, engagementAvailable)
+    rebuildResults()
+    queryInput.forceActiveFocus()
+    return true
+  }
+
   // Chips write their command into the query field rather than holding filter
   // state of their own, so clicking and typing drive the same one mechanism
   // and cannot drift apart.
@@ -336,6 +364,7 @@ Item {
       entries.push({ keyLabel: "[Ctrl+E]", label: "Enlarge" })
     entries.push({ keyLabel: "[Ctrl+W]", label: root.marketplaceShortcutLabel })
     entries.push({ keyLabel: "[Ctrl+G]", label: "GitHub source" })
+    entries.push({ keyLabel: "[Ctrl+O]", label: "Sort" })
     entries.push({ keyLabel: "[Ctrl+R]", label: "Refresh" })
     entries.push({ keyLabel: "[Ctrl+S]", label: "Settings" })
     return entries
@@ -626,6 +655,8 @@ Item {
       openGithubShortcut()
     } else if (isControlShortcut(event, Qt.Key_S)) {
       openSettings()
+    } else if (isControlShortcut(event, Qt.Key_O)) {
+      cycleSort()
     } else if (isControlShortcut(event, Qt.Key_R)) {
       requestCatalogRefresh()
     } else if (isControlShortcut(event, Qt.Key_U)) {
@@ -916,6 +947,38 @@ Item {
                 }
               }
             }
+
+            // The order outlives whichever filter is active, so it is a chip
+            // of its own rather than another entry in the filter model.
+            Rectangle {
+              readonly property bool active: root.activeSort !== ""
+
+              height: Style.space(26)
+              width: sortChipText.implicitWidth + Style.spacing.md * 2
+              radius: height / 2
+              color: active ? Util.alpha(root.shortcutColor, 0.18)
+                : Util.alpha(root.foreground, 0.06)
+              border.width: 1
+              border.color: active ? Util.alpha(root.shortcutColor, 0.70)
+                : Util.alpha(root.foreground, 0.16)
+
+              Text {
+                id: sortChipText
+                anchors.centerIn: parent
+                text: root.sortChipLabel
+                textFormat: Text.PlainText
+                color: parent.active ? root.shortcutColor : root.foreground
+                opacity: parent.active ? 1.0 : 0.72
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.caption
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.cycleSort()
+              }
+            }
           }
         }
 
@@ -965,6 +1028,7 @@ Item {
                   required property string version
                   required property string releaseTag
                   required property string repository
+                  required property string countsLine
 
                   readonly property bool selected: index === root.selectedIndex
                   width: ListView.view.width
@@ -1088,6 +1152,20 @@ Item {
                       color: resultRow.warning ? root.urgent
                         : (resultRow.selected ? root.selectedText : root.foreground)
                       opacity: resultRow.warning ? 1 : 0.55
+                      font.family: Style.font.menuFamily
+                      font.pixelSize: Style.font.body
+                      horizontalAlignment: Text.AlignRight
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      width: parent.width
+                      visible: resultRow.countsLine !== ""
+                      height: visible ? implicitHeight : 0
+                      text: resultRow.countsLine
+                      textFormat: Text.PlainText
+                      color: resultRow.selected ? root.selectedText
+                        : root.foreground
+                      opacity: 0.55
                       font.family: Style.font.menuFamily
                       font.pixelSize: Style.font.body
                       horizontalAlignment: Text.AlignRight
