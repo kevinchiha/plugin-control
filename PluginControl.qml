@@ -23,6 +23,32 @@ Item {
   property alias query: queryInput.text
   property string mode: "browse"
 
+  // The order is state of its own rather than text in the search field: a
+  // plug- command replaces whichever one is active, but an order has to
+  // combine with the filter and query already in play.
+  property string activeSort: ""
+
+  // Views, copies and hearts come from the marketplace's counter service. If
+  // it has never answered, every record reports metricsAvailable false and
+  // those three orders would rank everything as zero, so they are not offered.
+  readonly property bool engagementAvailable: {
+    var records = service && Array.isArray(service.records)
+      ? service.records : []
+    for (var i = 0; i < records.length; i++)
+      if (records[i] && records[i].metricsAvailable === true) return true
+    return false
+  }
+
+  readonly property string sortChipLabel:
+    "Sort: " + Fuzzy.sortLabel(activeSort)
+
+  function cycleSort() {
+    activeSort = Fuzzy.nextSort(activeSort, engagementAvailable)
+    rebuildResults()
+    queryInput.forceActiveFocus()
+    return true
+  }
+
   // Chips write their command into the query field rather than holding filter
   // state of their own, so clicking and typing drive the same one mechanism
   // and cannot drift apart.
@@ -356,7 +382,8 @@ Item {
     var records = service && Array.isArray(service.records)
       ? service.records : []
     var result = settingsMenuOpen ? PaletteViewModel.settingsResult()
-      : Fuzzy.search(records, query, 50)
+      : Fuzzy.search(records, query, 50,
+          Fuzzy.effectiveSort(activeSort, engagementAvailable))
     mode = result.mode
     filteredRecords = result.results
     displayModel.clear()
@@ -733,6 +760,8 @@ Item {
       activateFooter("refresh")
     } else if (isControlShortcut(event, Qt.Key_U)) {
       activateFooter("updates")
+    } else if (isControlShortcut(event, Qt.Key_O)) {
+      cycleSort()
     } else if (isControlShortcut(event, Qt.Key_Backspace)) {
       queryInput.text = deletePreviousWord(queryInput.text)
     } else if (event.modifiers === Qt.NoModifier
@@ -1075,6 +1104,38 @@ Item {
                     else root.applyFilter(modelData.completion)
                   }
                 }
+              }
+            }
+
+            // The order outlives whichever filter is active, so it is a chip
+            // of its own rather than another entry in the filter model.
+            Rectangle {
+              readonly property bool active: root.activeSort !== ""
+
+              height: Style.space(26)
+              width: sortChipText.implicitWidth + Style.spacing.md * 2
+              radius: height / 2
+              color: active ? Util.alpha(root.shortcutColor, 0.18)
+                : Util.alpha(root.foreground, 0.06)
+              border.width: 1
+              border.color: active ? Util.alpha(root.shortcutColor, 0.70)
+                : Util.alpha(root.foreground, 0.16)
+
+              Text {
+                id: sortChipText
+                anchors.centerIn: parent
+                text: root.sortChipLabel
+                textFormat: Text.PlainText
+                color: parent.active ? root.shortcutColor : root.foreground
+                opacity: parent.active ? 1.0 : 0.72
+                font.family: Style.font.menuFamily
+                font.pixelSize: Style.font.body
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.cycleSort()
               }
             }
           }

@@ -619,3 +619,71 @@ test("filter commands complete from partial input", () => {
   assert.deepEqual(completions("plug-disabled"), ["plug-disabled: "]);
   assert.deepEqual(completions("plug-ty"), ["plug-type: "]);
 });
+
+const sortRecords = Catalog.prepareRecords([
+  {
+    id: "io.example.beta", name: "Beta", source: "marketplace",
+    installable: true, kind: "Panel", stars: 1, hearts: 9, views: 2,
+    copies: 0, metricsAvailable: true,
+    listedAt: "2026-01-02T00:00:00Z", versionUpdatedAt: "2026-08-01T00:00:00Z"
+  },
+  {
+    id: "io.example.alpha", name: "Alpha", source: "marketplace",
+    installable: true, kind: "Panel", stars: 7, hearts: 1, views: 5,
+    copies: 3, metricsAvailable: true,
+    listedAt: "2026-05-09T00:00:00Z", versionUpdatedAt: "2026-02-01T00:00:00Z"
+  },
+  {
+    id: "io.example.gamma", name: "Gamma", source: "marketplace",
+    installable: true, kind: "Panel", stars: 7, hearts: 0, views: 0,
+    copies: 0, metricsAvailable: true,
+    listedAt: "", versionUpdatedAt: "not-a-date"
+  }
+]);
+
+const sortedIds = (sort) => Fuzzy.search(sortRecords, "", 50, sort)
+  .results.map((row) => row.id);
+
+test("every declared order sorts, and ties fall back to the name", () => {
+  assert.equal(Fuzzy.SORT_OPTIONS.length, 8);
+  assert.deepEqual(sortedIds("stars"),
+    ["io.example.alpha", "io.example.gamma", "io.example.beta"]);
+  assert.deepEqual(sortedIds("hearts"),
+    ["io.example.beta", "io.example.alpha", "io.example.gamma"]);
+  assert.deepEqual(sortedIds("views"),
+    ["io.example.alpha", "io.example.beta", "io.example.gamma"]);
+  assert.deepEqual(sortedIds("name"),
+    ["io.example.alpha", "io.example.beta", "io.example.gamma"]);
+  // alpha and gamma both have 7 stars, so the name breaks the tie.
+  assert.equal(sortedIds("stars")[0], "io.example.alpha");
+});
+
+test("an unreadable date sorts oldest instead of poisoning the order", () => {
+  const gamma = sortRecords.find((row) => row.id === "io.example.gamma");
+  assert.equal(gamma.listedTime, 0);
+  assert.equal(gamma.updatedTime, 0);
+  assert.equal(sortedIds("added").at(-1), "io.example.gamma");
+  assert.equal(sortedIds("updated").at(-1), "io.example.gamma");
+  // Recently added is newest first: alpha (May) before beta (January).
+  assert.deepEqual(sortedIds("added").slice(0, 2),
+    ["io.example.alpha", "io.example.beta"]);
+});
+
+test("orders needing the counter service are skipped when it is absent", () => {
+  // With counts available the chip walks all eight in order.
+  assert.equal(Fuzzy.nextSort("", true), "added");
+  assert.equal(Fuzzy.nextSort("stars", true), "views");
+  // Without them, views/copies/hearts are stepped over entirely.
+  assert.equal(Fuzzy.nextSort("stars", false), "name");
+  assert.equal(Fuzzy.effectiveSort("hearts", false), "");
+  assert.equal(Fuzzy.effectiveSort("hearts", true), "hearts");
+  // Stars ship with the catalog, so that order survives the outage.
+  assert.equal(Fuzzy.effectiveSort("stars", false), "stars");
+  assert.equal(Fuzzy.sortLabel(""), "Best match");
+  assert.equal(Fuzzy.sortLabel("hearts"), "Most hearts");
+});
+
+test("an unknown order falls back to relevance ranking", () => {
+  assert.equal(Fuzzy.sortLabel("nonsense"), "Best match");
+  assert.deepEqual(sortedIds("nonsense"), sortedIds(""));
+});

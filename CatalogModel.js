@@ -88,6 +88,13 @@ function timestamp(value) {
   return isFinite(parsed) ? parsed : NaN
 }
 
+// timestamp() reports NaN for an unreadable date, which would poison a sort;
+// this is the same parse with 0 (the oldest possible) as the fallback.
+function sortableTime(value) {
+  var parsed = timestamp(value)
+  return isFinite(parsed) ? parsed : 0
+}
+
 function activityState(record, nowValue) {
   if (!record || record.builtIn === true) return ""
   var now = Number(nowValue)
@@ -136,6 +143,11 @@ function normalizeRecord(value) {
   record.addedAt = cleanText(record.addedAt)
   record.listedAt = cleanText(record.listedAt)
   record.versionUpdatedAt = cleanText(record.versionUpdatedAt)
+  // Sorting by date has to survive a catalog that spells a date wrong or
+  // omits it, so an unreadable stamp sorts as the oldest rather than as NaN.
+  record.listedTime = sortableTime(record.listedAt)
+    || sortableTime(cleanText(record.addedAt) + "T00:00:00Z")
+  record.updatedTime = sortableTime(record.versionUpdatedAt)
   record.previewImageUrl = record.marketplaceListed
     ? marketplaceAssetUrl(record.previewImage, "detail") : ""
   record.previewThumbnailUrl = record.marketplaceListed

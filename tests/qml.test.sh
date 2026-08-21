@@ -41,6 +41,9 @@ ctrl_u_line="$(rg -nF '{ keyLabel: "[Ctrl+u]"' \
 ctrl_i_line="$(rg -nF '{ keyLabel: "[Ctrl+i]"' \
   "$ROOT/PaletteFooter.qml" | cut -d: -f1)"
 (( ctrl_u_line < ctrl_i_line ))
+rg -Fq 'function cycleSort()' "$ROOT/PluginControl.qml"
+rg -Fq 'onClicked: root.cycleSort()' "$ROOT/PluginControl.qml"
+rg -Fq 'Qt.Key_O' "$ROOT/PluginControl.qml"
 rg -Fq 'signal activated(string action)' "$ROOT/PaletteFooter.qml"
 rg -Fq 'onClicked: root.activated(modelData.action)' "$ROOT/PaletteFooter.qml"
 rg -Fq 'function activateFooter(action)' "$ROOT/PluginControl.qml"
