@@ -7,6 +7,13 @@ Item {
   property string marketplaceLabel: "Marketplace"
   property color foreground: Color.menu.text
   property color shortcutColor: Color.accent
+  // Off while a modal is up, matching the result rows.
+  property bool pointerInteractive: true
+
+  // The entries look like buttons, so they behave like buttons. The action
+  // name is dispatched by the palette to the same code its Ctrl shortcut
+  // runs, so the two paths cannot drift apart.
+  signal activated(string action)
   readonly property bool compact: width < Style.space(690)
   readonly property int footerFontSize: Math.max(9,
     Style.font.caption - (compact ? 1 : 0))
@@ -25,12 +32,15 @@ Item {
 
     Repeater {
       model: [
-        { keyLabel: "[Ctrl+u]", label: "Check for plugin updates" },
-        { keyLabel: "[Ctrl+i]", label: "Plugin info" },
-        { keyLabel: "[Ctrl+w]", label: root.marketplaceLabel },
-        { keyLabel: "[Ctrl+g]", label: "GitHub plugin source" },
-        { keyLabel: "[Ctrl+r]", label: "Refresh cache" },
-        { keyLabel: "[Ctrl+s]", label: "Settings" }
+        { keyLabel: "[Ctrl+u]", label: "Check for plugin updates",
+          action: "updates" },
+        { keyLabel: "[Ctrl+i]", label: "Plugin info", action: "info" },
+        { keyLabel: "[Ctrl+w]", label: root.marketplaceLabel,
+          action: "marketplace" },
+        { keyLabel: "[Ctrl+g]", label: "GitHub plugin source",
+          action: "github" },
+        { keyLabel: "[Ctrl+r]", label: "Refresh cache", action: "refresh" },
+        { keyLabel: "[Ctrl+s]", label: "Settings", action: "settings" }
       ]
 
       delegate: Item {
@@ -76,6 +86,13 @@ Item {
             fontSizeMode: Text.HorizontalFit
             minimumPixelSize: Math.max(8, root.footerFontSize - 2)
           }
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          enabled: root.pointerInteractive
+          cursorShape: Qt.PointingHandCursor
+          onClicked: root.activated(modelData.action)
         }
       }
     }

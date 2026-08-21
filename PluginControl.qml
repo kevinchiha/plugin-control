@@ -40,6 +40,31 @@ Item {
   readonly property string activeTypeKind: mode === "type"
     ? String(Fuzzy.parseQuery(query).query || "").trim() : ""
 
+  // Clicking a footer entry and pressing its Ctrl shortcut run this same
+  // code, so the pointer and keyboard paths cannot drift apart.
+  function activateFooter(action) {
+    if (action === "updates") {
+      transientMessage = ""
+      queryInput.text = "plug-update: "
+      queryInput.cursorPosition = queryInput.text.length
+      if (service) service.requestUpdateCheck()
+    } else if (action === "info") {
+      openSelectedInfo()
+    } else if (action === "marketplace") {
+      openMarketplaceShortcut()
+    } else if (action === "github") {
+      openGithubShortcut()
+    } else if (action === "refresh") {
+      transientMessage = ""
+      if (service) service.requestRefresh(true)
+    } else if (action === "settings") {
+      openSettings()
+    } else {
+      return false
+    }
+    return true
+  }
+
   function applyFilter(completion) {
     queryInput.text = String(completion || "")
     queryInput.cursorPosition = queryInput.text.length
@@ -697,21 +722,17 @@ Item {
     if (isControlShortcut(event, Qt.Key_P)) {
       dismiss()
     } else if (isControlShortcut(event, Qt.Key_I)) {
-      openSelectedInfo()
+      activateFooter("info")
     } else if (isControlShortcut(event, Qt.Key_W)) {
-      openMarketplaceShortcut()
+      activateFooter("marketplace")
     } else if (isControlShortcut(event, Qt.Key_G)) {
-      openGithubShortcut()
+      activateFooter("github")
     } else if (isControlShortcut(event, Qt.Key_S)) {
-      openSettings()
+      activateFooter("settings")
     } else if (isControlShortcut(event, Qt.Key_R)) {
-      transientMessage = ""
-      if (service) service.requestRefresh(true)
+      activateFooter("refresh")
     } else if (isControlShortcut(event, Qt.Key_U)) {
-      transientMessage = ""
-      queryInput.text = "plug-update: "
-      queryInput.cursorPosition = queryInput.text.length
-      if (service) service.requestUpdateCheck()
+      activateFooter("updates")
     } else if (isControlShortcut(event, Qt.Key_Backspace)) {
       queryInput.text = deletePreviousWord(queryInput.text)
     } else if (event.modifiers === Qt.NoModifier
@@ -1258,6 +1279,8 @@ Item {
           marketplaceLabel: root.marketplaceShortcutLabel
           foreground: root.foreground
           shortcutColor: root.shortcutColor
+          pointerInteractive: !root.modalDialogOpened
+          onActivated: function(action) { root.activateFooter(action) }
         }
       }
     }

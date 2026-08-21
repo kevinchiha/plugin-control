@@ -24,23 +24,28 @@ rg -q 'function toggle\(\)' "$ROOT/PluginControl.qml"
 rg -q 'TextInput \{' "$ROOT/PluginControl.qml"
 rg -q 'Qt.Key_P' "$ROOT/PluginControl.qml"
 rg -Fq 'event.key === Qt.Key_Escape' "$ROOT/PluginControl.qml"
-rg -Fq '{ keyLabel: "[Ctrl+i]", label: "Plugin info" }' \
+rg -Fq '{ keyLabel: "[Ctrl+i]", label: "Plugin info", action: "info" }' \
   "$ROOT/PaletteFooter.qml"
-rg -Fq '{ keyLabel: "[Ctrl+u]", label: "Check for plugin updates" }' \
+rg -Fq '{ keyLabel: "[Ctrl+u]", label: "Check for plugin updates",' \
   "$ROOT/PaletteFooter.qml"
 rg -Fq '{ keyLabel: "[Ctrl+w]",' \
   "$ROOT/PaletteFooter.qml"
-rg -Fq '{ keyLabel: "[Ctrl+g]", label: "GitHub plugin source" }' \
+rg -Fq '{ keyLabel: "[Ctrl+g]", label: "GitHub plugin source",' \
   "$ROOT/PaletteFooter.qml"
-rg -Fq '{ keyLabel: "[Ctrl+r]", label: "Refresh cache" }' \
+rg -Fq '{ keyLabel: "[Ctrl+r]", label: "Refresh cache", action: "refresh" }' \
   "$ROOT/PaletteFooter.qml"
-rg -Fq '{ keyLabel: "[Ctrl+s]", label: "Settings" }' \
+rg -Fq '{ keyLabel: "[Ctrl+s]", label: "Settings", action: "settings" }' \
   "$ROOT/PaletteFooter.qml"
 ctrl_u_line="$(rg -nF '{ keyLabel: "[Ctrl+u]"' \
   "$ROOT/PaletteFooter.qml" | cut -d: -f1)"
 ctrl_i_line="$(rg -nF '{ keyLabel: "[Ctrl+i]"' \
   "$ROOT/PaletteFooter.qml" | cut -d: -f1)"
 (( ctrl_u_line < ctrl_i_line ))
+rg -Fq 'signal activated(string action)' "$ROOT/PaletteFooter.qml"
+rg -Fq 'onClicked: root.activated(modelData.action)' "$ROOT/PaletteFooter.qml"
+rg -Fq 'function activateFooter(action)' "$ROOT/PluginControl.qml"
+rg -Fq 'onActivated: function(action) { root.activateFooter(action) }' \
+  "$ROOT/PluginControl.qml"
 rg -Fq 'width: footerRow.width / 6' "$ROOT/PaletteFooter.qml"
 rg -Fq 'anchors.horizontalCenter: parent.horizontalCenter' \
   "$ROOT/PaletteFooter.qml"
