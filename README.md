@@ -60,11 +60,46 @@ Use these commands to narrow the action first:
 - `plug-disable:` shows enabled switchable plugins
 - `plug-update:` checks first, then shows safely updateable plugins
 
+Four more narrow the list rather than the action:
+
+- `plug-builtin:` shows built-in Omarchy plugins
+- `plug-mine:` shows plugins you installed or cloned yourself
+- `plug-disabled:` shows switched-off plugins of any origin
+- `plug-type:` filters by kind — bar widget, panel, service, overlay
+
+`plug-dis` is ambiguous on purpose and offers both `plug-disable:` (turn one
+off) and `plug-disabled:` (list the off ones).
+
 Commands are not pinned. Type `add`, `remove`, `enable`, `disable`, or `update`
 to bring one forward, then press Tab or Enter to complete it. Search restarts
 after the colon. Completing `plug-update:` starts its read-only check. Backspace
 edits a plugin name normally; at an empty completed prefix, one press removes
 the trailing space and the next clears the command.
+
+### Chips
+
+A chip row under the search field carries the same filters — All, Available,
+Mine, Built-in, Disabled, Type — and highlights whichever one the query
+currently parses to. Chips write their command into the search field rather
+than holding filter state of their own, so clicking and typing drive the same
+mechanism and cannot disagree. Type needs a value rather than being a boolean,
+so its chip steps through the kinds and clears on the step past the last.
+
+The footer entries are buttons too: clicking one runs the same code as its
+Ctrl shortcut.
+
+### Sort
+
+A Sort chip sits beside the filters, also on Ctrl+o, and steps through eight
+orders: best match, recently added, recent activity, most starred, most viewed,
+most copied, most hearts, and A-Z. The order is state of its own rather than
+another `plug-` command, because those replace each other while an order has to
+combine with whichever filter and query are already active — "Mine, most
+starred" is a reasonable thing to ask for.
+
+Stars ship with the catalog. Views, copies and hearts come from the
+marketplace's separate counter service, so when it has never answered the chip
+steps over those three orders instead of ranking everything as zero.
 
 Ctrl+u is the direct update-check path. It enters `plug-update:`, fetches each
 added Git plugin's upstream `HEAD`, and lists only safe fast-forward updates.
@@ -101,6 +136,7 @@ Useful keys:
 | `Ctrl+w`                             | Open the plugin website                 |
 | `Ctrl+g`                             | Open the source repository              |
 | `Ctrl+s`                             | Open settings; `Escape` returns         |
+| `Ctrl+o`                             | Step the sort order                     |
 | `Escape` or `q` in any submenu       | Return directly to the plugin list      |
 
 The status row keeps update and action feedback on the left and catalog
