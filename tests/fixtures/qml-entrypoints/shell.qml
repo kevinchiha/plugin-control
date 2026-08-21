@@ -269,8 +269,9 @@ ShellRoot {
       if (overlay && "service" in overlay) {
         overlay.service = root.serviceObject
         overlay.query = "plug-ad"
+        // "ad" is also a subsequence of plug-disabled, so two commands offer.
         if (overlay.mode !== "command"
-            || overlay.filteredRecords.length !== 1
+            || overlay.filteredRecords.length !== 2
             || overlay.selectedRecord !== null) {
           console.error("PLUGIN_CONTROL_LOAD_ERROR add completion stage")
         }

@@ -22,6 +22,43 @@ Item {
   property bool surfaceVisible: false
   property alias query: queryInput.text
   property string mode: "browse"
+
+  // Chips write their command into the query field rather than holding filter
+  // state of their own, so clicking and typing drive the same one mechanism
+  // and cannot drift apart.
+  readonly property var filterChips: [
+    { label: "All", mode: "browse", completion: "" },
+    { label: "Available", mode: "add", completion: "plug-add: " },
+    { label: "Mine", mode: "mine", completion: "plug-mine: " },
+    { label: "Built-in", mode: "builtin", completion: "plug-builtin: " },
+    { label: "Disabled", mode: "disabled", completion: "plug-disabled: " },
+    { label: "Type", mode: "type", completion: "plug-type: " }
+  ]
+  readonly property var typeFilterKinds: [
+    "bar widget", "panel", "service", "overlay"
+  ]
+  readonly property string activeTypeKind: mode === "type"
+    ? String(Fuzzy.parseQuery(query).query || "").trim() : ""
+
+  function applyFilter(completion) {
+    queryInput.text = String(completion || "")
+    queryInput.cursorPosition = queryInput.text.length
+    queryInput.forceActiveFocus()
+    return true
+  }
+
+  // Unlike the boolean filters, a kind filter needs a value, so the chip steps
+  // through the kinds and the step past the last one clears the filter.
+  function cycleTypeFilter() {
+    var next = 0
+    if (mode === "type") {
+      var active = String(Fuzzy.parseQuery(queryInput.text).query || "")
+        .toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()
+      next = typeFilterKinds.indexOf(active) + 1
+      if (next >= typeFilterKinds.length) return applyFilter("")
+    }
+    return applyFilter("plug-type: " + typeFilterKinds[next])
+  }
   property int selectedIndex: 0
   property var filteredRecords: []
   property var selectedRecord: null
@@ -80,14 +117,16 @@ Item {
   readonly property int statusHeight: paletteChromeVisible
     && (leftStatusText.length > 0 || rightStatusText.length > 0)
     ? Style.space(28) : 0
+  readonly property int activeFilterRowHeight: paletteChromeVisible
+    ? Style.space(34) : 0
   readonly property int visibleRows: Math.max(1,
     Math.min(6, filteredRecords.length || 1))
   readonly property int resultRowsHeight: visibleRows * rowHeight
     + Math.max(0, visibleRows - 1) * Style.space(2)
   readonly property int chromeSpacingCount: paletteChromeVisible
-    ? (statusHeight > 0 ? 3 : 2) : 0
+    ? (statusHeight > 0 ? 4 : 3) : 0
   readonly property int desiredCardHeight: Style.spacing.panelPadding * 2
-    + activeHeaderHeight + resultRowsHeight
+    + activeHeaderHeight + activeFilterRowHeight + resultRowsHeight
     + activeFooterHeight + statusHeight
     + Style.spacing.sm * chromeSpacingCount
   readonly property int availableCardHeight: Math.max(Style.space(220),
@@ -965,10 +1004,66 @@ Item {
         }
 
         Item {
+          visible: root.paletteChromeVisible
+          width: parent.width
+          height: root.activeFilterRowHeight
+
+          Row {
+            id: filterRow
+            anchors.left: parent.left
+            anchors.leftMargin: Style.spacing.md
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.spacing.sm
+
+            Repeater {
+              model: root.filterChips
+
+              delegate: Rectangle {
+                required property var modelData
+                readonly property bool active: root.mode === modelData.mode
+                readonly property string chipText:
+                  modelData.mode === "type" && root.activeTypeKind
+                    ? modelData.label + ": " + root.activeTypeKind
+                    : modelData.label
+
+                height: Style.space(26)
+                width: chipLabel.implicitWidth + Style.spacing.md * 2
+                radius: height / 2
+                color: active ? Util.alpha(root.shortcutColor, 0.18)
+                  : Util.alpha(root.foreground, 0.06)
+                border.width: 1
+                border.color: active ? Util.alpha(root.shortcutColor, 0.70)
+                  : Util.alpha(root.foreground, 0.16)
+
+                Text {
+                  id: chipLabel
+                  anchors.centerIn: parent
+                  text: parent.chipText
+                  textFormat: Text.PlainText
+                  color: parent.active ? root.shortcutColor : root.foreground
+                  opacity: parent.active ? 1.0 : 0.72
+                  font.family: Style.font.menuFamily
+                  font.pixelSize: Style.font.body
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  onClicked: {
+                    if (modelData.mode === "type") root.cycleTypeFilter()
+                    else root.applyFilter(modelData.completion)
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        Item {
           width: parent.width
           height: Math.max(root.rowHeight,
             parent.height - root.activeHeaderHeight - root.activeFooterHeight
-              - root.statusHeight
+              - root.activeFilterRowHeight - root.statusHeight
               - parent.spacing * root.chromeSpacingCount)
           clip: true
 
